@@ -1,0 +1,42 @@
+strategies:
+  A_growth_momentum:
+    desc: 순수 성장 모멘텀/가속도 중심
+    weights:
+      Revenue_ttm_yoy: 1.0
+      OpIncome_ttm_yoy: 1.0
+      Revenue_acc2: 0.7
+      OpIncome_acc2: 0.7
+      CAPEX_ttm_yoy: 0.0
+      CAPEX_acc2: 0.0
+      Debt_to_Equity_log: 0.0
+      Quality_CFO_to_Assets: 0.0
+    filters: {}
+  B_growth_plus_quality:
+    desc: 성장 + 재무건전성(품질) 강화
+    weights:
+      Revenue_ttm_yoy: 1.0
+      OpIncome_ttm_yoy: 1.0
+      Revenue_acc2: 0.5
+      OpIncome_acc2: 0.5
+      CAPEX_ttm_yoy: -0.15
+      CAPEX_acc2: 0.0
+      Debt_to_Equity_log: -0.8
+      Quality_CFO_to_Assets: 0.3
+      CFO_isnull: -0.1
+    filters:
+      max_Debt_to_Equity_log: 2.398
+  C_garp:
+    desc: 'GARP: 성장 + 품질 + 밸류(추후 밸류 팩터 붙일 예정)'
+    weights:
+      Revenue_ttm_yoy: 0.8
+      OpIncome_ttm_yoy: 0.8
+      Revenue_acc2: 0.4
+      OpIncome_acc2: 0.4
+      CAPEX_ttm_yoy: -0.1
+      CAPEX_acc2: 0.0
+      Debt_to_Equity_log: -0.7
+      Quality_CFO_to_Assets: 0.25
+      Value_placeholder: 0.0
+      CFO_isnull: -0.1
+    filters:
+      max_Debt_to_Equity_log: 2.398

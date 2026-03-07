@@ -1,0 +1,20 @@
+# step 1 드라이런(미리보기)
+powershell -ExecutionPolicy Bypass -File .\scripts\ops\step1_archive_and_prune_raw.ps1 -ASOF 2026-02-18 -DryRun
+
+# step 1 실제 실행
+powershell -ExecutionPolicy Bypass -File .\scripts\ops\step1_archive_and_prune_raw.ps1 -ASOF 2026-02-18
+
+# healthcheck after step 1
+python .\scripts\ops\healthcheck.py --asof 20yy-mm-dd
+
+# step 2 “실전 모델용 최종 피처 테이블” 고정하기
+python .\scripts\make_features_live.py --asof 2026-02-18 --metric revenue_op --in_v 2 --out_v 1
+
+# step 3-1 가격 데이터 수집(일봉)
+python .\scripts\make_prices_daily.py --asof 2026-02-18 --metric revenue_op --start 20160101 --out_v 1
+
+# step 3-2 월별 수익률 만들기(ptkrx 일봉 -> 월말 종가 -> 1개월 수익률)
+python .\scripts\make_returns_monthly.py --asof 2026-02-18 --metric revenue_op --px_v 1 --out_v 1 --start 20160101
+python .\scripts\backtest_quarterly_rebalance.py --asof 2026-02-18 --metric revenue_op --feat_v 1 --ret_v 1 --k 20 --out_v 1
+
+

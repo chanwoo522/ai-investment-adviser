@@ -1,0 +1,159 @@
+----260221 update----
+-현재 내 포트폴리오: C:\Users\chanw\ai_inv_adv\current_portfolio\260218.xlsx
+-투자기간: unlimited
+-리스크 허용: max
+-국내주식&해외주식 비중: don't care
+-선물 사용 여부: available if necessary
+-레버리지 사용 여부: no
+-AI를 어디까지 자동화할지: 의논 필요
+-투자철학: 재무제표와 기업 철학, 거버넌스, 지분구조, 외국인 비중, 그 기업이 속한 산업의 성장성, 기업의 꾸준한 이익, 기술적 해자 보유 기업, 높은 영업이익률, 설명 가능한 멀티플
+-매매빈도: 연 2~3회, 필요 시 추가 또는 감소 가능
+-투자목표: 자산 증식
+-투자가능 대상: 원자재 선물 ETN, 국내 개별 주식, 국외 개별 주식, 국내 ETF, 국외 ETF
+-국외 투자 시 환헤지 여부: no, 시세차익 + 환차익 동시 수혜 가능한 논리 선호
+-AI 활용 목표: AI를 이용해서 뭔가를 예측하고 투자보조지표로 활용
+-Core Engine(phase 1)
++ Pattern Module(phase 1)
++ Optional Alpha Module(phase 2)
++ Regime Detector(phase 2)
++ ETF Engine(phase 3)
++ Meta Allocation Layer(phase 4)
+-정규화 방식: Z = (x - mean) / std
+-CoreScore: CoreScore =
++ Z(3Y Revenue CAGR)
++ Z(3Y EBIT CAGR)
++ Z(EBIT Margin Latest)
++ Z(ROIC)
++ Z(FCF / Net Income)
+- Z(Debt Ratio)
+- Z(PER / Growth)
+-Phase 1
+  ·Universe (시점 t 기준): KOSPI + KOSDAQ, 시총 상위 70%, 최근 1년 평균 거래대금 하위 30% 제거, 영업이익 > 0, 재무 3년 이상 존재 → 이 집합을 U(t)
+  ·Peer 그룹 정의: Peer(i,t) ={ j ∈ U(t) | Industry(j) = Industry(i) AND CapBucket(j) = CapBucket(i)}
+  ·Robust Z-score 계산: z = (x - median) / (IQR / 1.349)
+  ·CoreScore 구성: 성장=Revenue CAGR(3Y), EBIT CAGR(3Y), 수익성=EBIT Margin, ROIC, 현금흐름=FCF / Net Income, 안정성=Debt Ratio(감점), 
+  ·밸류 (패턴별 Primary/Secondary 적용) → 각 항목 robust z-score 동일가중 합산: Core = Σ z
+  ·"Pattern Module" 분류 방법: 재무 데이터 룰 기반
+## Purpose
+- Represent each firm as a probability vector over 5 business structure patterns.
+- Allow lifecycle transition (soft, not hard classification).
+- PatternBonus is additive but capped (≤ 0.7σ).
+
+## Input Features (all peer-group robust z-scores)
+Growth: z_rev_cagr, z_ebit_cagr
+Profitability: z_gross_margin, z_ebit_margin, z_roic
+Cash Flow: z_fcf_conv, z_fcf_stability
+Capital Intensity: z_capex_ratio, z_capex_growth
+R&D: z_rd_ratio
+Volatility: z_rev_vol, z_ebit_vol
+
+## Raw Pattern Scores
+1) Razor & Blade
+Razor_raw = z_gross_margin + z_ebit_margin + z_fcf_conv + z_fcf_stability + 0.5 * z_rev_cagr
+2) Commodity Cyclical
+Commodity_raw = z_rev_vol + z_ebit_vol - z_fcf_stability
+3) Platform Network Effect
+Platform_raw = z_gross_margin + z_rev_cagr - z_capex_ratio + 0.5 * z_roic
+4) High R&D Tech
+RND_raw = z_rd_ratio + z_rev_cagr + z_roic
+5) Capital Intensive Infra
+Infra_raw = z_capex_ratio + z_capex_growth + 0.5 * z_rev_cagr
+
+## Soft Classification
+Step 1: Remove negative influence
+Score_i = max(raw_i, 0)
+Step 2: Normalize
+If Σ Score_i > 0:
+  P_i = Score_i / Σ Score_i
+Else:
+  P_i = 0.2  (equal probability)
+
+## Pattern Bonus Weights
+Razor      = +0.5σ
+Platform   = +0.4σ
+High R&D   = +0.3σ
+Commodity  = 0
+Infra      = 0
+
+PatternBonus = Σ (P_i × Bonus_i)
+PatternBonus capped: PatternBonus ≤ 0.7σ
+
+## Final Integration
+
+TotalScore = CoreScore + PatternBonus
+
+Notes:
+- Pattern influence intentionally limited (10–20% of total impact).
+- Industry normalization applies only to CoreScore inputs.
+- Pattern classification remains industry-agnostic.
+- Designed for rolling multi-year backtesting.
+
+  · Total Score: Total = Core + PatternBonus
+
+Gross Margin = GrossProfit / Revenue
+Operating Margin = OperatingIncome / Revenue
+Net Margin = NetIncome / Revenue
+ROE = NetIncome / Equity
+ROA = NetIncome / Assets
+FCF = CFO - CAPEX
+Debt Ratio = Liabilities / Assets
+
+----260302 update----
+오빠 접수 완료 💪✨ 앞으로 개발의 “최종 목적 = 백테스트로 검증된 전략을 현실에 적용 가능한 형태로 발전” 이거를 최상위 요구사항으로 고정해둘게요. 
+그리고 오빠가 강조한 “백테스트 결과에서 포트폴리오에 담긴 종목들의 근거 데이터까지 확인 가능해야 함” ← 이건 앞으로 설계에서 필수 산출물로 박아두자. 
+
+내가 정리한 ‘큰 틀’ (guideline 반영)
+투자철학/목표/리스크/매매빈도/대상자산/환헤지 선호, 그리고 엔진 로드맵(Phase 1~4)까지 이미 잘 정리돼 있어요. 
+
+Phase 1의 핵심은:
+Universe U(t) 정의(시총/거래대금/영업이익/재무기간 필터) 
+Peer 그룹(Industry × CapBucket) 기반 robust z-score( (x-median)/(IQR/1.349) ) 
+CoreScore(성장+수익성+현금흐름+안정성+밸류) + PatternBonus(soft prob, cap ≤0.7σ) 합산 
+
+다음 스텝 (바로 구현해야 하는 “검증/현실적용” 연결고리)
+1) Backtest “Explainability Pack”을 표준 산출물로 만들기
+백테스트 1회 실행마다 아래 3개를 반드시 저장하도록 고정하자:
+portfolio_holdings__asof=...csv
+ticker, name, weight, shares(선택), price, market_cap
+cap_bucket, industry, score_total, score_core, score_pattern, pattern_probs(5개)
+portfolio_inputs_long__asof=...parquet (또는 csv)
+(ticker, asof, feature_name, raw_value, peer_median, peer_iqr, z_robust, winsorized 여부 등)
+“왜 이 종목이 들어갔는지”를 피처 단위로 역추적 가능
+portfolio_peers__asof=...parquet
+각 ticker의 peer 그룹 구성(같은 Industry×CapBucket의 비교군 tickers)
+robust z-score가 “누구랑 비교해서” 나왔는지 재현 가능
+이렇게 하면 오빠가 원하는 “종목코드/종목명/주가/시총/밸류 계산 근거 데이터 확인”이 완벽히 충족돼요.
+
+2) “현실 적용”을 위해, 리밸런싱 시그널 출력 포맷 고정
+실전에 붙이려면 백테스트 출력이 곧 주문/리밸런싱 지시서가 되어야 하니까,
+orders__asof=...csv (ticker, action, target_weight, reason_top_features)
+rebalance_summary__asof=...md (상위 교체 사유 요약) 까지 같이 뽑자.
+
+지금 당장 오빠 프로젝트에서 이어갈 실행 순서
+OFS fundamentals 기반 features 생성 → CoreScore/PatternBonus 계산
+분기 리밸런싱 백테스트 실행
+실행마다 위 “Explainability Pack” 3종 저장
+상위 몇 회차(예: 최근 4개 asof)만이라도 포트폴리오 구성 근거를 실제로 열어보며 검증
+
+ai_inv_adv/
+  engine/
+    io.py                 # 데이터 로드/세이브, 경로 규칙
+    universe.py           # U(t) 생성/검증
+    peer.py               # Peer(i,t) 구성, cap_bucket
+    robustz.py            # robust z, winsorize 옵션
+    scoring_core.py       # CoreScore 계산
+    scoring_pattern.py    # Pattern prob + PatternBonus (cap ≤0.7σ)
+    explain.py            # Explainability Pack 생성/저장
+    orders.py             # 실전 주문 포맷 생성
+    run_asof.py           # "asof 1회" 실행 엔트리 (전략 공통)
+    backtest_q.py         # 분기 리밸런싱 드라이버 (전략 공통)
+  strategies/
+    base.py               # Strategy 인터페이스(프로토콜)
+    B_growth_plus_quality.py
+    B_value_quality.py
+    B_quality_only.py
+    ...
+  scripts/
+    run_strategy.py       # CLI 진입점(전략 선택/다중 실행)
+
+-Phase 2 "Optional Alpha" 분류 방법: LLM
