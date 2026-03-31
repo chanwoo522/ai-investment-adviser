@@ -1,0 +1,10 @@
+03:02:09 [INFO] year range 2016..2025
+03:02:09 [INFO] mode=universe metric=revenue_op merge_existing=False
+03:02:09 [INFO] primary fs_div=CFS (fallback enabled)
+03:02:09 [INFO] universe=data\processed\universe__asof=2026-03-29__src=phase1__mcap_top=800__trd_bot=0.1__v=1.parquet rows=0
+03:02:09 [INFO] input tickers rows=0 mode=universe
+03:02:09 [INFO] corp_codes rows=3915
+03:02:09 [CHECK] corp_code missing ratio=nan
+03:02:09 [INFO] corp_code usable rows: 0 -> 0
+03:02:09 [INFO] no existing fundamentals cache at data\processed\fundamentals_quarterly__asof=2026-03-29__src=dart__fs=CFS__y=2016-2025__v=1.parquet
+03:02:09 [OK] nothing to fetch; no fundamentals work items

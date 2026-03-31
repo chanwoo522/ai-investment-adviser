@@ -1,0 +1,6 @@
+[INFO] asof_in=2026-02-18 -> asof_trade=20260218
+[INFO] base rows=0
+[DEBUG] content_head=b'\r\n\r\n\r\n\r\n\r\n\r\n<html xmlns="http://www.w3.org/1999/xhtml">\r\n<head>\r'
+[DEBUG] content_is_excel=False
+[INFO] kind bytes=1246096 excel_magic=False
+[INFO] kind rows=2767

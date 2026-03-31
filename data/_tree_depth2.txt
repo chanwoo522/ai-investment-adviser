@@ -1,0 +1,42 @@
+﻿[DIR] C:\Users\chanw\ai_inv_adv\data\archive
+  └─ C:\Users\chanw\ai_inv_adv\data\archive\deprecated_processed
+  └─ C:\Users\chanw\ai_inv_adv\data\archive\logs
+  └─ C:\Users\chanw\ai_inv_adv\data\archive\old_versions
+  └─ C:\Users\chanw\ai_inv_adv\data\archive\raw_dart
+[DIR] C:\Users\chanw\ai_inv_adv\data\backtest
+  └─ C:\Users\chanw\ai_inv_adv\data\backtest\audits
+  └─ C:\Users\chanw\ai_inv_adv\data\backtest\reports
+  └─ C:\Users\chanw\ai_inv_adv\data\backtest\summaries
+  └─ C:\Users\chanw\ai_inv_adv\data\backtest\walk_forward
+[DIR] C:\Users\chanw\ai_inv_adv\data\features
+  └─ C:\Users\chanw\ai_inv_adv\data\features\factors_ttm_acc2
+  └─ C:\Users\chanw\ai_inv_adv\data\features\factor_matrix
+  └─ C:\Users\chanw\ai_inv_adv\data\features\features_live
+  └─ C:\Users\chanw\ai_inv_adv\data\features\feature_matrix
+[DIR] C:\Users\chanw\ai_inv_adv\data\interim
+  └─ C:\Users\chanw\ai_inv_adv\data\interim\fundamentals_merged
+  └─ C:\Users\chanw\ai_inv_adv\data\interim\fundamentals_quarterly
+  └─ C:\Users\chanw\ai_inv_adv\data\interim\marketdata
+  └─ C:\Users\chanw\ai_inv_adv\data\interim\prices_daily
+  └─ C:\Users\chanw\ai_inv_adv\data\interim\shares_industry
+  └─ C:\Users\chanw\ai_inv_adv\data\interim\universe
+[DIR] C:\Users\chanw\ai_inv_adv\data\live
+  └─ C:\Users\chanw\ai_inv_adv\data\live\actions
+  └─ C:\Users\chanw\ai_inv_adv\data\live\candidates
+  └─ C:\Users\chanw\ai_inv_adv\data\live\execution
+  └─ C:\Users\chanw\ai_inv_adv\data\live\reports
+  └─ C:\Users\chanw\ai_inv_adv\data\live\scores
+[DIR] C:\Users\chanw\ai_inv_adv\data\portfolio
+  └─ C:\Users\chanw\ai_inv_adv\data\portfolio\current
+  └─ C:\Users\chanw\ai_inv_adv\data\portfolio\history
+[DIR] C:\Users\chanw\ai_inv_adv\data\processed
+  └─ C:\Users\chanw\ai_inv_adv\data\processed\archive
+  └─ C:\Users\chanw\ai_inv_adv\data\processed\explainability
+[DIR] C:\Users\chanw\ai_inv_adv\data\raw
+  └─ C:\Users\chanw\ai_inv_adv\data\raw\dart
+  └─ C:\Users\chanw\ai_inv_adv\data\raw\financial
+  └─ C:\Users\chanw\ai_inv_adv\data\raw\industry
+  └─ C:\Users\chanw\ai_inv_adv\data\raw\krx
+  └─ C:\Users\chanw\ai_inv_adv\data\raw\price
+  └─ C:\Users\chanw\ai_inv_adv\data\raw\universe
+[DIR] C:\Users\chanw\ai_inv_adv\data\reference

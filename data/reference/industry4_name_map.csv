@@ -1,0 +1,150 @@
+﻿industry4,industry_name,source,n,name_candidates,has_conflict,asof
+104,동·식물성 유지 및 낙농제품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+108,기타 식품 제조업,KIND+local_code_join,5,1,False,2025-11-16
+192,석유 정제품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+201,기초 화학물질 제조업,KIND+local_code_join,4,1,False,2025-11-16
+204,기타 화학제품 제조업,KIND+local_code_join,7,1,False,2025-11-16
+205,화학섬유 제조업,KIND+local_code_join,2,1,False,2025-11-16
+211,기초 의약물질 제조업,KIND+local_code_join,8,1,False,2025-11-16
+212,의약품 제조업,KIND+local_code_join,13,1,False,2025-11-16
+213,의료용품 및 기타 의약 관련제품 제조업,KIND+local_code_join,2,1,False,2025-11-16
+221,고무제품 제조업,KIND+local_code_join,2,1,False,2025-11-16
+239,기타 비금속 광물제품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+242,1차 비철금속 제조업,KIND+local_code_join,1,1,False,2025-11-16
+261,반도체 제조업,KIND+local_code_join,1,1,False,2025-11-16
+262,전자부품 제조업,KIND+local_code_join,2,1,False,2025-11-16
+264,통신 및 방송 장비 제조업,KIND+local_code_join,2,1,False,2025-11-16
+271,의료용 기기 제조업,KIND+local_code_join,1,1,False,2025-11-16
+281,"전동기, 발전기 및 전기 변환 · 공급 · 제어 장치 제조업",KIND+local_code_join,2,1,False,2025-11-16
+282,일차전지 및 이차전지 제조업,KIND+local_code_join,3,1,False,2025-11-16
+291,일반 목적용 기계 제조업,KIND+local_code_join,1,1,False,2025-11-16
+292,특수 목적용 기계 제조업,KIND+local_code_join,5,1,False,2025-11-16
+301,자동차용 엔진 및 자동차 제조업,KIND+local_code_join,1,1,False,2025-11-16
+303,자동차 신품 부품 제조업,KIND+local_code_join,5,1,False,2025-11-16
+351,전기업,KIND+local_code_join,1,1,False,2025-11-16
+411,건물 건설업,KIND+local_code_join,1,1,False,2025-11-16
+412,토목 건설업,KIND+local_code_join,1,1,False,2025-11-16
+423,전기 및 통신 공사업,KIND+local_code_join,1,1,False,2025-11-16
+461,상품 중개업,KIND+local_code_join,1,1,False,2025-11-16
+465,기계장비 및 관련 물품 도매업,KIND+local_code_join,1,1,False,2025-11-16
+467,기타 전문 도매업,KIND+local_code_join,2,1,False,2025-11-16
+493,도로 화물 운송업,KIND+local_code_join,1,2,True,2025-11-16
+511,항공 여객 운송업,KIND+local_code_join,1,1,False,2025-11-16
+551,일반 및 생활 숙박시설 운영업,KIND+local_code_join,2,1,False,2025-11-16
+582,소프트웨어 개발 및 공급업,KIND+local_code_join,5,1,False,2025-11-16
+592,오디오물 출판 및 원판 녹음업,KIND+local_code_join,1,1,False,2025-11-16
+602,텔레비전 방송업,KIND+local_code_join,1,1,False,2025-11-16
+612,전기 통신업,KIND+local_code_join,1,1,False,2025-11-16
+631,"자료처리, 호스팅, 포털 및 기타 인터넷 정보매개 서비스업",KIND+local_code_join,1,1,False,2025-11-16
+649,기타 금융업,KIND+local_code_join,5,1,False,2025-11-16
+661,금융 지원 서비스업,KIND+local_code_join,1,1,False,2025-11-16
+701,자연과학 및 공학 연구개발업,KIND+local_code_join,1,1,False,2025-11-16
+715,회사 본부 및 경영 컨설팅 서비스업,KIND+local_code_join,2,1,False,2025-11-16
+721,"건축기술, 엔지니어링 및 관련 기술 서비스업",KIND+local_code_join,1,1,False,2025-11-16
+969,그외 기타 개인 서비스업,KIND+local_code_join,1,1,False,2025-11-16
+2049,기타 화학제품 제조업,KIND+local_code_join,3,1,False,2025-11-16
+2050,화학섬유 제조업,KIND+local_code_join,1,1,False,2025-11-16
+2221,플라스틱제품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+2312,유리 및 유리제품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+2332,"시멘트, 석회, 플라스터 및 그 제품 제조업",KIND+local_code_join,1,1,False,2025-11-16
+2411,1차 철강 제조업,KIND+local_code_join,3,1,False,2025-11-16
+2413,1차 철강 제조업,KIND+local_code_join,1,1,False,2025-11-16
+2512,"구조용 금속제품, 탱크 및 증기발생기 제조업",KIND+local_code_join,1,1,False,2025-11-16
+2611,반도체 제조업,KIND+local_code_join,4,1,False,2025-11-16
+2612,반도체 제조업,KIND+local_code_join,3,1,False,2025-11-16
+2621,전자부품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+2622,전자부품 제조업,KIND+local_code_join,5,1,False,2025-11-16
+2629,전자부품 제조업,KIND+local_code_join,8,1,False,2025-11-16
+2642,통신 및 방송 장비 제조업,KIND+local_code_join,1,1,False,2025-11-16
+2811,"전동기, 발전기 및 전기 변환 · 공급 · 제어 장치 제조업",KIND+local_code_join,1,1,False,2025-11-16
+2830,절연선 및 케이블 제조업,KIND+local_code_join,1,1,False,2025-11-16
+3111,선박 및 보트 건조업,KIND+local_code_join,2,1,False,2025-11-16
+3131,"항공기,우주선 및 부품 제조업",KIND+local_code_join,1,1,False,2025-11-16
+4111,건물 건설업,KIND+local_code_join,1,1,False,2025-11-16
+4610,상품 중개업,KIND+local_code_join,1,1,False,2025-11-16
+5299,기타 운송관련 서비스업,KIND+local_code_join,1,1,False,2025-11-16
+5821,소프트웨어 개발 및 공급업,KIND+local_code_join,4,1,False,2025-11-16
+6491,기타 금융업,KIND+local_code_join,1,1,False,2025-11-16
+7011,자연과학 및 공학 연구개발업,KIND+local_code_join,1,1,False,2025-11-16
+11122,알코올음료 제조업,KIND+local_code_join,1,1,False,2025-11-16
+11209,비알코올음료 및 얼음 제조업,KIND+local_code_join,1,1,False,2025-11-16
+12000,담배 제조업,KIND+local_code_join,1,1,False,2025-11-16
+14111,봉제의복 제조업,KIND+local_code_join,1,1,False,2025-11-16
+14199,봉제의복 제조업,KIND+local_code_join,1,1,False,2025-11-16
+19210,석유 정제품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+20111,기초 화학물질 제조업,KIND+local_code_join,5,1,False,2025-11-16
+20119,기초 화학물질 제조업,KIND+local_code_join,1,1,False,2025-11-16
+20129,기초 화학물질 제조업,KIND+local_code_join,3,1,False,2025-11-16
+20411,기타 화학제품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+20422,기타 화학제품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+20423,기타 화학제품 제조업,KIND+local_code_join,3,1,False,2025-11-16
+20494,기타 화학제품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+20501,화학섬유 제조업,KIND+local_code_join,1,1,False,2025-11-16
+21212,의약품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+21230,의약품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+21309,의료용품 및 기타 의약 관련제품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+22232,플라스틱제품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+23999,기타 비금속 광물제품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+24133,1차 철강 제조업,KIND+local_code_join,1,1,False,2025-11-16
+24199,1차 철강 제조업,KIND+local_code_join,1,1,False,2025-11-16
+24213,1차 비철금속 제조업,KIND+local_code_join,1,1,False,2025-11-16
+25912,기타 금속 가공제품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+26291,전자부품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+26292,전자부품 제조업,KIND+local_code_join,1,1,False,2025-11-16
+26299,전자부품 제조업,KIND+local_code_join,2,1,False,2025-11-16
+27212,"측정, 시험, 항해, 제어 및 기타 정밀기기 제조업; 광학기기 제외",KIND+local_code_join,1,1,False,2025-11-16
+27219,"측정, 시험, 항해, 제어 및 기타 정밀기기 제조업; 광학기기 제외",KIND+local_code_join,1,1,False,2025-11-16
+27309,사진장비 및 광학기기 제조업,KIND+local_code_join,1,1,False,2025-11-16
+28111,"전동기, 발전기 및 전기 변환 · 공급 · 제어 장치 제조업",KIND+local_code_join,2,1,False,2025-11-16
+28121,"전동기, 발전기 및 전기 변환 · 공급 · 제어 장치 제조업",KIND+local_code_join,1,1,False,2025-11-16
+28201,일차전지 및 이차전지 제조업,KIND+local_code_join,1,1,False,2025-11-16
+28202,일차전지 및 이차전지 제조업,KIND+local_code_join,3,1,False,2025-11-16
+28302,절연선 및 케이블 제조업,KIND+local_code_join,2,1,False,2025-11-16
+28519,가정용 기기 제조업,KIND+local_code_join,1,1,False,2025-11-16
+28520,가정용 기기 제조업,KIND+local_code_join,1,1,False,2025-11-16
+29111,일반 목적용 기계 제조업,KIND+local_code_join,1,1,False,2025-11-16
+29119,일반 목적용 기계 제조업,KIND+local_code_join,2,1,False,2025-11-16
+29162,일반 목적용 기계 제조업,KIND+local_code_join,1,1,False,2025-11-16
+29172,일반 목적용 기계 제조업,KIND+local_code_join,1,1,False,2025-11-16
+29176,일반 목적용 기계 제조업,KIND+local_code_join,2,1,False,2025-11-16
+29229,특수 목적용 기계 제조업,KIND+local_code_join,1,1,False,2025-11-16
+29271,특수 목적용 기계 제조업,KIND+local_code_join,15,1,False,2025-11-16
+29280,특수 목적용 기계 제조업,KIND+local_code_join,2,1,False,2025-11-16
+29299,특수 목적용 기계 제조업,KIND+local_code_join,1,1,False,2025-11-16
+30121,자동차용 엔진 및 자동차 제조업,KIND+local_code_join,2,1,False,2025-11-16
+31113,선박 및 보트 건조업,KIND+local_code_join,1,1,False,2025-11-16
+31321,"항공기,우주선 및 부품 제조업",KIND+local_code_join,1,1,False,2025-11-16
+35120,전기업,KIND+local_code_join,1,1,False,2025-11-16
+35200,연료용 가스 제조 및 배관공급업,KIND+local_code_join,2,1,False,2025-11-16
+35300,"증기, 냉·온수 및 공기조절 공급업",KIND+local_code_join,1,1,False,2025-11-16
+41112,건물 건설업,KIND+local_code_join,1,1,False,2025-11-16
+41221,토목 건설업,KIND+local_code_join,2,1,False,2025-11-16
+42311,전기 및 통신 공사업,KIND+local_code_join,1,1,False,2025-11-16
+46431,생활용품 도매업,KIND+local_code_join,1,1,False,2025-11-16
+46510,기계장비 및 관련 물품 도매업,KIND+local_code_join,1,1,False,2025-11-16
+46713,기타 전문 도매업,KIND+local_code_join,1,1,False,2025-11-16
+46800,상품 종합 도매업,KIND+local_code_join,2,1,False,2025-11-16
+47111,종합 소매업,KIND+local_code_join,3,1,False,2025-11-16
+47812,기타 상품 전문 소매업,KIND+local_code_join,1,1,False,2025-11-16
+47859,기타 상품 전문 소매업,KIND+local_code_join,1,1,False,2025-11-16
+50112,해상 운송업,KIND+local_code_join,3,1,False,2025-11-16
+58221,소프트웨어 개발 및 공급업,KIND+local_code_join,2,1,False,2025-11-16
+58222,소프트웨어 개발 및 공급업,KIND+local_code_join,1,1,False,2025-11-16
+59141,"영화, 비디오물, 방송프로그램 제작 및 배급업",KIND+local_code_join,1,1,False,2025-11-16
+59201,오디오물 출판 및 원판 녹음업,KIND+local_code_join,2,1,False,2025-11-16
+61220,전기 통신업,KIND+local_code_join,2,1,False,2025-11-16
+62021,"컴퓨터 프로그래밍, 시스템 통합 및 관리업",KIND+local_code_join,1,1,False,2025-11-16
+62022,"컴퓨터 프로그래밍, 시스템 통합 및 관리업",KIND+local_code_join,1,1,False,2025-11-16
+63120,"자료처리, 호스팅, 포털 및 기타 인터넷 정보매개 서비스업",KIND+local_code_join,1,1,False,2025-11-16
+64121,은행 및 저축기관,KIND+local_code_join,3,1,False,2025-11-16
+64913,기타 금융업,KIND+local_code_join,1,1,False,2025-11-16
+64992,기타 금융업,KIND+local_code_join,27,1,False,2025-11-16
+65121,보험업,KIND+local_code_join,5,1,False,2025-11-16
+65200,재 보험업,KIND+local_code_join,1,1,False,2025-11-16
+66121,금융 지원 서비스업,KIND+local_code_join,13,1,False,2025-11-16
+70113,자연과학 및 공학 연구개발업,KIND+local_code_join,3,1,False,2025-11-16
+71310,광고업,KIND+local_code_join,1,1,False,2025-11-16
+72129,"건축기술, 엔지니어링 및 관련 기술 서비스업",KIND+local_code_join,2,1,False,2025-11-16
+75210,여행사 및 기타 여행보조 서비스업,KIND+local_code_join,1,1,False,2025-11-16
+75320,"경비, 경호 및 탐정업",KIND+local_code_join,1,1,False,2025-11-16
+91249,유원지 및 기타 오락관련 서비스업,KIND+local_code_join,2,1,False,2025-11-16

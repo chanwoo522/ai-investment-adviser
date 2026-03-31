@@ -1,0 +1,12 @@
+{
+  "asof": "2025-11-30",
+  "metric": "revenue_op",
+  "feat_v": 301,
+  "strategy": "D_quality_filter_debt_profitaccel_liq",
+  "target_date": "2025-11-30",
+  "all_feature_tickers": 2,
+  "target_cohort_tickers": 2,
+  "target_cohort_coverage": 1.0,
+  "passed_filters_rows": 2,
+  "selected_topk_rows": 2
+}

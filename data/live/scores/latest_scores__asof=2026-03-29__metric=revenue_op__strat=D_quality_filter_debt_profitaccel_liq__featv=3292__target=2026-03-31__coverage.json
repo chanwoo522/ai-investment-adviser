@@ -1,0 +1,41 @@
+{
+  "asof": "2026-03-29",
+  "metric": "revenue_op",
+  "feat_v": 3292,
+  "strategy": "D_quality_filter_debt_profitaccel_liq",
+  "target_date": "2026-03-31",
+  "holdings_csv": "data\\portfolio\\current\\20260330_holdings_clean.csv",
+  "features_live_path": "data\\features\\features_live\\features_live__asof=2026-03-29__metric=revenue_op__v=3292.parquet",
+  "all_feature_tickers": 427,
+  "target_cohort_tickers": 411,
+  "target_cohort_coverage": 0.9625292740046838,
+  "passed_filters_rows": 156,
+  "hold_bonus": 0.5,
+  "clip_z": 4.0,
+  "use_robust_z": true,
+  "selected_topk_rows": 10,
+  "raw_factors": [
+    "op_growth_streak2",
+    "rev_growth_streak2"
+  ],
+  "clip_tiers": [
+    {
+      "upto": 1.0,
+      "slope": 1.0
+    },
+    {
+      "upto": 2.0,
+      "slope": 0.8
+    },
+    {
+      "upto": 3.0,
+      "slope": 0.6
+    },
+    {
+      "upto": 4.0,
+      "slope": 0.4
+    }
+  ],
+  "portfolio_size": 10,
+  "keep_current_top_n": 3
+}
