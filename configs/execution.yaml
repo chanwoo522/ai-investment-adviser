@@ -1,0 +1,23 @@
+execution:
+  split_days: 3
+  split_ratio_buy: [0.4, 0.3, 0.3]
+  split_ratio_sell: [0.7, 0.3, 0.0]
+
+  max_adv_ratio: 0.15
+  min_notional_per_order: 300000
+
+  skip_if_gap_up_pct_buy: 0.08
+  skip_if_gap_down_pct_buy: -0.12
+
+  fallback_keep_cash: true
+  round_lot: 1
+
+  slippage:
+    base_bps: 5
+    adv_impact_coef: 10
+
+risk:
+  max_single_weight: 0.15
+
+ops:
+  carry_unfilled_to_next_day: true

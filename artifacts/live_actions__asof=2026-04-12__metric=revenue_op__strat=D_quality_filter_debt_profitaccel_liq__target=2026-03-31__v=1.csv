@@ -1,0 +1,11 @@
+﻿ticker,name_final,shares,current_shares,current_weight,target_shares,target_value,score,score_rank,industry_code,industry_name,industry4,target_selection_bucket,target_kept_from_previous,cohort_status,score_availability_reason,filter_status_diag,passed_filters_diag,selected_topk_diag,in_target_topk_diag,current_price_diag,price_date_diag,current_value_diag,is_current,is_target,action,reason
+218410,RFHIC,,,,,,3.68667345602538,1.0,032604,통신 및 방송 장비 제조업,032604,new_or_rank_fill,0.0,,,,,,,,,,0,1,BUY,전략 신규 편입 (rank=1)
+060280,큐렉소,,,,,,3.548409083045223,2.0,074708,기타 상품 전문 소매업,074708,new_or_rank_fill,0.0,,,,,,,,,,0,1,BUY,전략 신규 편입 (rank=2)
+041920,메디아나,,,,,,3.324785761567488,3.0,032701,의료용 기기 제조업,032701,new_or_rank_fill,0.0,,,,,,,,,,0,1,BUY,전략 신규 편입 (rank=3)
+425420,티에프이,,,,,,3.212865933090549,4.0,032602,전자부품 제조업,032602,new_or_rank_fill,0.0,,,,,,,,,,0,1,BUY,전략 신규 편입 (rank=4)
+098460,고영,,,,,,3.209456100329831,5.0,032902,특수 목적용 기계 제조업,032902,new_or_rank_fill,0.0,,,,,,,,,,0,1,BUY,전략 신규 편입 (rank=5)
+171090,선익시스템,,,,,,3.181108987664899,6.0,032902,특수 목적용 기계 제조업,032902,new_or_rank_fill,0.0,,,,,,,,,,0,1,BUY,전략 신규 편입 (rank=6)
+005690,파미셀,,,,,,3.024429438351622,7.0,032101,기초 의약물질 제조업,032101,new_or_rank_fill,0.0,,,,,,,,,,0,1,BUY,전략 신규 편입 (rank=7)
+214150,클래시스,600.0,600.0,0.5856204097410127,,,0.2013819026637257,73.0,032701,의료용 기기 제조업,032701,keep_current_top_n,1.0,in_target_cohort,scored_in_target_cohort,passed,True,1.0,1.0,50500.0,2026-03-31,30300000.0,1,1,HOLD,기존 보유 상위 점수 유지 (rank=73)
+005930,삼성전자,100.0,100.0,0.3231542327019714,,,-1.9011007202560304,153.0,032604,통신 및 방송 장비 제조업,032604,keep_current_top_n,1.0,in_target_cohort,scored_in_target_cohort,passed,True,1.0,1.0,167200.0,2026-03-31,16720000.0,1,1,HOLD,기존 보유 상위 점수 유지 (rank=153)
+058470,리노공업,50.0,50.0,0.0912253575570158,,,,,032602,전자부품 제조업,032602,,,not_in_target_cohort,no_feature_history,excluded_by_filter,False,0.0,0.0,94400.0,2026-03-31,4720000.0,1,0,HOLD_REVIEW,평가 보류 유지 (no_feature_history)
