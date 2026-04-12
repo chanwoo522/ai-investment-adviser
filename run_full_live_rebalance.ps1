@@ -2,7 +2,11 @@ param(
     [ValidateSet("fast","smart","refresh","dryrun")]
     [string]$Mode = "smart",
 
+<<<<<<< HEAD
     [string]$ASOF = "2026-03-29",
+=======
+    [string]$ASOF = "2026-04-20",
+>>>>>>> 09e60c16 (feat: live rebalance pipeline cleanup + reporting system stabilization)
     [string]$TARGET = "2026-03-31",
     [string]$METRIC = "revenue_op",
     [string]$STRAT = "D_quality_filter_debt_profitaccel_liq",
@@ -14,6 +18,10 @@ param(
 
     [int]$McapTop = 800,
     [double]$TrdBot = 0.1,
+<<<<<<< HEAD
+=======
+    [int]$K = 10,
+>>>>>>> 09e60c16 (feat: live rebalance pipeline cleanup + reporting system stabilization)
 
     [int]$PX_V = 1,
     [int]$RET_V = 1,
@@ -110,7 +118,13 @@ function Find-ProcessedByPrefixAsOf {
 function Find-Holdings {
     param([string]$Explicit)
     if($Explicit -and (Test-Path $Explicit)){ return (Resolve-Path $Explicit).Path }
+<<<<<<< HEAD
     $paths = @(
+=======
+
+    $paths = @(
+        ".\data\portfolio\current\20260330_holdings_clean.csv",
+>>>>>>> 09e60c16 (feat: live rebalance pipeline cleanup + reporting system stabilization)
         ".\current_portfolio\20260314_holdings_clean_manual.csv",
         ".\data\portfolio\current\current_holdings.csv",
         ".\data\processed\current_holdings_manual.csv",
@@ -118,8 +132,23 @@ function Find-Holdings {
         ".\data\processed\empty_holdings.csv"
     )
     $p = Find-FirstExisting -Paths $paths
+<<<<<<< HEAD
     if($null -eq $p){ throw "No holdings csv found." }
     return $p
+=======
+    if($null -ne $p){ return $p }
+
+    $candDir = ".\data\portfolio\current"
+    if(Test-Path $candDir){
+        $latest = Get-ChildItem $candDir -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match 'holdings.*\.csv$|_holdings_.*\.csv$|holdings_clean.*\.csv$' } |
+            Sort-Object LastWriteTimeUtc -Descending |
+            Select-Object -First 1
+        if($latest){ return $latest.FullName }
+    }
+
+    throw "No holdings csv found."
+>>>>>>> 09e60c16 (feat: live rebalance pipeline cleanup + reporting system stabilization)
 }
 
 function Find-ExecutionConfig {
@@ -321,7 +350,11 @@ if($needPrepare){
 Run-Step -Label "build_universe" -ScriptPath ".\scripts\data_pipeline\build_universe.py" -StepArgs @("--asof",$ASOF,"--mcap_top",$McapTop,"--trd_bot",$TrdBot) -DryRun:$IsDryRun
 Run-Step -Label "build_factors" -ScriptPath ".\scripts\data_pipeline\build_factors_ttm_acc2.py" -StepArgs @("--asof",$ASOF,"--metric",$METRIC,"--input_parquet",$fundExact,"--out_v",$FACTOR_V) -DryRun:$IsDryRun
 Run-Step -Label "make_features_live" -ScriptPath ".\scripts\data_pipeline\make_features_live.py" -StepArgs @("--asof",$ASOF,"--metric",$METRIC,"--in_v",$FACTOR_V,"--out_v",$FEAT_V,"--save_meta") -DryRun:$IsDryRun
+<<<<<<< HEAD
 Run-Step -Label "score_latest_rebalance" -ScriptPath ".\scripts\live\score_latest_rebalance.py" -StepArgs @("--asof",$ASOF,"--metric",$METRIC,"--feat_v",$FEAT_V,"--strategy",$STRAT,"--target_date",$TARGET,"--holdings_csv",$holdings) -DryRun:$IsDryRun
+=======
+Run-Step -Label "score_latest_rebalance" -ScriptPath ".\scripts\live\score_latest_rebalance.py" -StepArgs @("--asof",$ASOF,"--metric",$METRIC,"--feat_v",$FEAT_V,"--strategy",$STRAT,"--k",$K,"--target_date",$TARGET,"--holdings_csv",$holdings) -DryRun:$IsDryRun
+>>>>>>> 09e60c16 (feat: live rebalance pipeline cleanup + reporting system stabilization)
 Run-Step -Label "generate_live_actions" -ScriptPath ".\scripts\live\generate_live_actions.py" -StepArgs @("--asof",$ASOF,"--metric",$METRIC,"--strategy",$STRAT,"--feat_v",$FEAT_V,"--target_date",$TARGET,"--holdings_csv",$holdings,"--out_v",$ACTION_V,"--save_candidates") -DryRun:$IsDryRun
 
 $legacyActionsCsv = Join-Path (Join-Path $script:DataRootAbs "live\actions") "live_actions__asof=${ASOF}__metric=${METRIC}__strat=${STRAT}__target=${TARGET}__v=${ACTION_V}.csv"

@@ -1,0 +1,35 @@
+﻿# Python / env
+.venv/
+__pycache__/
+*.py[cod]
+
+# Backup / cache
+*.bak
+docs_cache/
+*.pkl
+
+# Logs
+logs/
+*.log
+run_log.txt
+
+# Build / archives
+dist/
+artifacts/
+legacy/
+ai_inv_adv.zip
+
+# Data outputs / raw data
+data/raw/
+data/processed/
+data/live/
+data/archive/
+data/production/
+data/sandbox/
+data/factor_weight_ml/
+data/ai_filter/
+data_inventory_*/
+*.parquet
+
+# Optional local research scratch
+research/

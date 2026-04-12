@@ -1,2 +1,0 @@
-﻿asof,metric,objective,train_months,test_months,step_months,strategies,ks,months,net_nav,cagr_net,sharpe_net,maxdd_net
-2026-02-18,revenue_op,sharpe_net,36,12,12,"B_growth_plus_quality,D_quality_filter_debt_profitaccel","10,15,20",84,13.218804250725075,0.44600671651122825,1.4472101247971523,-0.1970932111619853

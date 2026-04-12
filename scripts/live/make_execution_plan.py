@@ -174,6 +174,8 @@ def main() -> None:
             f"execution split ratios must each have length 3. got buy={split_ratio_buy}, sell={split_ratio_sell}"
         )
     max_adv_ratio = float(exec_cfg.get("max_adv_ratio", 0.15))
+    min_notional_per_order = float(exec_cfg.get("min_notional_per_order", 0))
+    round_lot = int(exec_cfg.get("round_lot", 1) or 1)
     base_bps = float(exec_cfg.get("slippage", {}).get("base_bps", 5))
     impact_coef = float(exec_cfg.get("slippage", {}).get("adv_impact_coef", 10))
 
@@ -263,6 +265,13 @@ def main() -> None:
                 qty = 0
             else:
                 qty = math.floor(use_value / price)
+<<<<<<< HEAD
+=======
+                if round_lot > 1:
+                    qty = (qty // round_lot) * round_lot
+                if qty > 0 and (qty * price) < min_notional_per_order:
+                    qty = 0
+>>>>>>> 09e60c16 (feat: live rebalance pipeline cleanup + reporting system stabilization)
             df.at[idx, f"day{i}_qty"] = qty
             df.at[idx, f"day{i}_order_value"] = qty * price if qty > 0 else 0.0
 

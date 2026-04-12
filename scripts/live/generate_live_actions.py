@@ -105,7 +105,7 @@ def load_universe_scores(asof: str, metric: str, strategy: str, feat_v: int, tar
     df["ticker"] = normalize_ticker(df["ticker"])
     df = _ensure_score_columns(df)
 
-    keep = [c for c in ["ticker", "name", "score", "score_adj", "hold_bonus_applied", "score_rank", "score_adj_rank", "industry_code", "industry_name"] if c in df.columns]
+    keep = [c for c in ["ticker", "name", "score", "score_adj", "hold_bonus_applied", "score_rank", "score_adj_rank", "industry_code", "industry_name", "expectation_overlay_active", "expectation_score", "expectation_penalty", "mcap_group", "mcap_rank_pct"] if c in df.columns]
     uni = df[keep].copy()
     uni = uni.dropna(subset=["ticker"]).drop_duplicates("ticker", keep="first")
     uni = uni.rename(
@@ -132,7 +132,7 @@ def load_topk(asof: str, metric: str, strategy: str, feat_v: int, target_date: s
 
     topk["ticker"] = normalize_ticker(topk["ticker"])
     topk = _ensure_score_columns(topk)
-    keep = [c for c in ["ticker", "name", "score", "score_adj", "hold_bonus_applied", "score_rank", "score_adj_rank", "industry_code", "industry_name", "industry4", "selection_bucket", "kept_from_previous"] if c in topk.columns]
+    keep = [c for c in ["ticker", "name", "score", "score_adj", "hold_bonus_applied", "score_rank", "score_adj_rank", "industry_code", "industry_name", "industry4", "selection_bucket", "kept_from_previous", "mcap_group_selection_reason", "expectation_overlay_active", "expectation_score", "expectation_penalty", "mcap_group", "mcap_rank_pct"] if c in topk.columns]
     topk = topk[keep].copy()
     topk = topk.dropna(subset=["ticker"]).drop_duplicates("ticker", keep="first")
     topk["target_flag"] = 1
@@ -148,6 +148,7 @@ def load_topk(asof: str, metric: str, strategy: str, feat_v: int, target_date: s
             "industry_name": "target_industry_name",
             "selection_bucket": "target_selection_bucket",
             "kept_from_previous": "target_kept_from_previous",
+            "mcap_group_selection_reason": "target_mcap_group_selection_reason",
         }
     )
     return topk
@@ -573,7 +574,13 @@ def main() -> None:
         "industry_code",
         "industry_name",
         "industry4",
+        "mcap_group",
+        "mcap_rank_pct",
+        "expectation_overlay_active",
+        "expectation_score",
+        "expectation_penalty",
         "target_selection_bucket",
+        "target_mcap_group_selection_reason",
         "target_kept_from_previous",
         "cohort_status",
         "score_availability_reason",
