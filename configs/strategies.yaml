@@ -1,0 +1,210 @@
+strategies:
+
+  A_growth_momentum:
+    desc: "순수 성장 모멘텀/가속도 중심"
+    weights:
+      Revenue_ttm_yoy: 1.0
+      OpIncome_ttm_yoy: 1.0
+      Revenue_acc2: 0.7
+      OpIncome_acc2: 0.7
+    filters: {}
+
+  B_growth_plus_quality:
+    desc: "성장 + 재무건전성(품질) 강화"
+    weights:
+      Revenue_ttm_yoy: 1.0
+      OpIncome_ttm_yoy: 1.0
+      Revenue_acc2: 0.5
+      OpIncome_acc2: 0.5
+      CAPEX_ttm_yoy: -0.15
+      Debt_to_Equity_log: -0.8
+      Quality_CFO_to_Assets: 0.3
+      CFO_isnull: -0.1
+    filters:
+      max_Debt_to_Equity_log: 2.398
+
+  C_garp:
+    desc: "GARP 성장 + 품질"
+    weights:
+      Revenue_ttm_yoy: 0.8
+      OpIncome_ttm_yoy: 0.8
+      Revenue_acc2: 0.4
+      OpIncome_acc2: 0.4
+      CAPEX_ttm_yoy: -0.1
+      Debt_to_Equity_log: -0.7
+      Quality_CFO_to_Assets: 0.25
+      CFO_isnull: -0.1
+    filters:
+      max_Debt_to_Equity_log: 2.398
+
+  D_quality_filter_debt_profitaccel:
+    desc: "이익 가속도 중심(로그 완화) + 연속 성장 보너스 + 부채 통제"
+    weights:
+      OpIncome_acc2_log1p: 1.0
+      Revenue_acc2: 0.25
+      Debt_to_Equity_log: -0.35
+      op_growth_streak2: 0.15
+      rev_growth_streak2: 0.05
+    filters:
+      max_Debt_to_Equity_log: 2.398
+    scoring:
+      method: zscore
+      clip_z: 4.0
+      clip_tiers:
+        - upto: 1.0
+          slope: 1.00
+        - upto: 2.0
+          slope: 0.80
+        - upto: 3.0
+          slope: 0.60
+        - upto: 4.0
+          slope: 0.40
+      hold_bonus: 0.50
+      use_robust_z: true
+      raw_factors:
+        - op_growth_streak2
+        - rev_growth_streak2
+    selection:
+      portfolio_size: 10
+      keep_current_top_n: 3
+
+  B_no_revenue:
+    desc: "B에서 Revenue_ttm_yoy 제거"
+    weights:
+      OpIncome_ttm_yoy: 1.0
+      Revenue_acc2: 0.5
+      OpIncome_acc2: 0.5
+      CAPEX_ttm_yoy: -0.15
+      Debt_to_Equity_log: -0.8
+      Quality_CFO_to_Assets: 0.3
+      CFO_isnull: -0.1
+    filters:
+      max_Debt_to_Equity_log: 2.398
+
+  B_no_opincome:
+    desc: "B에서 OpIncome_ttm_yoy 제거"
+    weights:
+      Revenue_ttm_yoy: 1.0
+      Revenue_acc2: 0.5
+      OpIncome_acc2: 0.5
+      CAPEX_ttm_yoy: -0.15
+      Debt_to_Equity_log: -0.8
+      Quality_CFO_to_Assets: 0.3
+      CFO_isnull: -0.1
+    filters:
+      max_Debt_to_Equity_log: 2.398
+
+  B_no_accel:
+    desc: "B에서 acceleration 제거"
+    weights:
+      Revenue_ttm_yoy: 1.0
+      OpIncome_ttm_yoy: 1.0
+      CAPEX_ttm_yoy: -0.15
+      Debt_to_Equity_log: -0.8
+      Quality_CFO_to_Assets: 0.3
+      CFO_isnull: -0.1
+    filters:
+      max_Debt_to_Equity_log: 2.398
+
+  B_no_debt:
+    desc: "B에서 Debt_to_Equity_log 제거"
+    weights:
+      Revenue_ttm_yoy: 1.0
+      OpIncome_ttm_yoy: 1.0
+      Revenue_acc2: 0.5
+      OpIncome_acc2: 0.5
+      CAPEX_ttm_yoy: -0.15
+      Quality_CFO_to_Assets: 0.3
+      CFO_isnull: -0.1
+    filters: {}
+
+  B_revenue_only:
+    desc: "Revenue growth only"
+    weights:
+      Revenue_ttm_yoy: 1.0
+    filters: {}
+
+  B_revenue_plus_debt:
+    desc: "Revenue growth + debt control"
+    weights:
+      Revenue_ttm_yoy: 1.0
+      Debt_to_Equity_log: -0.8
+      Quality_CFO_to_Assets: 0.3
+      CFO_isnull: -0.1
+    filters:
+      max_Debt_to_Equity_log: 2.398
+
+  B_growth_only:
+    desc: "Revenue + OpIncome growth only"
+    weights:
+      Revenue_ttm_yoy: 1.0
+      OpIncome_ttm_yoy: 1.0
+    filters: {}
+
+  E_profitaccel_core:
+    desc: "핵심 전략: 영업이익 가속도 중심 + 약한 매출 가속도 + 부채 필터"
+    weights:
+      OpIncome_acc2: 1.0
+      Revenue_acc2: 0.20
+      Debt_to_Equity_log: -0.25
+      CFO_isnull: -0.05
+    filters:
+      max_Debt_to_Equity_log: 2.398
+
+  F_profitability_plus_accel:
+    desc: "이익 가속도 + 수익성(마진/자산대비 이익) 결합"
+    weights:
+      OpIncome_acc2: 0.90
+      Revenue_acc2: 0.15
+      OpMargin_ttm: 0.35
+      OpIncome_to_Assets_ttm: 0.35
+      Debt_to_Equity_log: -0.25
+      CFO_isnull: -0.05
+    filters:
+      max_Debt_to_Equity_log: 2.398
+
+  G_margin_quality:
+    desc: "수익성 중심 품질 전략 + 약한 이익 가속도"
+    weights:
+      OpMargin_ttm: 0.55
+      OpIncome_to_Assets_ttm: 0.55
+      OpIncome_acc2: 0.35
+      Debt_to_Equity_log: -0.20
+      CFO_isnull: -0.05
+    filters:
+      max_Debt_to_Equity_log: 2.398
+
+  D_quality_filter_debt_profitaccel_liq:
+    desc: "이익 가속도 중심(로그 완화) + 연속 성장 보너스 + 부채 통제 + 유동성 필터(거래대금+시총)"
+    weights:
+      OpIncome_acc2_log1p: 1.0
+      Revenue_acc2: 0.25
+      Debt_to_Equity_log: -0.35
+      op_growth_streak2: 0.15
+      rev_growth_streak2: 0.05
+    filters:
+      max_Debt_to_Equity_log: 2.398
+      min_traded_value: 1000000000
+      min_mcap: 100000000000
+      min_OpIncome_ttm: 0
+      min_op_cur_q: 0
+    scoring:
+      method: zscore
+      clip_z: 4.0
+      clip_tiers:
+        - upto: 1.0
+          slope: 1.00
+        - upto: 2.0
+          slope: 0.80
+        - upto: 3.0
+          slope: 0.60
+        - upto: 4.0
+          slope: 0.40
+      hold_bonus: 0.50
+      use_robust_z: true
+      raw_factors:
+        - op_growth_streak2
+        - rev_growth_streak2
+    selection:
+      portfolio_size: 10
+      keep_current_top_n: 3

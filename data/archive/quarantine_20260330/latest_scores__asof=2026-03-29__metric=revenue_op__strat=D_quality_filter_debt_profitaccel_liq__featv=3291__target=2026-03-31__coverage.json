@@ -1,0 +1,22 @@
+{
+  "asof": "2026-03-29",
+  "metric": "revenue_op",
+  "feat_v": 3291,
+  "strategy": "D_quality_filter_debt_profitaccel_liq",
+  "target_date": "2026-03-31",
+  "all_feature_tickers": 455,
+  "target_cohort_tickers": 439,
+  "target_cohort_coverage": 0.9648351648351648,
+  "passed_filters_rows": 162,
+  "hold_bonus": 0.5,
+  "clip_z": 4.0,
+  "use_robust_z": true,
+  "selected_topk_rows": 10,
+  "raw_factors": [
+    "op_growth_streak2",
+    "rev_growth_streak2"
+  ],
+  "clip_tiers": [],
+  "portfolio_size": 10,
+  "keep_current_top_n": 3
+}

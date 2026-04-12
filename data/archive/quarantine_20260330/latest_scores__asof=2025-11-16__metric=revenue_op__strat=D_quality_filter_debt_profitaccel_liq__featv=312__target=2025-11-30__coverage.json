@@ -1,0 +1,19 @@
+{
+  "asof": "2025-11-16",
+  "metric": "revenue_op",
+  "feat_v": 312,
+  "strategy": "D_quality_filter_debt_profitaccel_liq",
+  "target_date": "2025-11-30",
+  "all_feature_tickers": 456,
+  "target_cohort_tickers": 456,
+  "target_cohort_coverage": 1.0,
+  "passed_filters_rows": 456,
+  "hold_bonus": 0.2,
+  "clip_z": 2.5,
+  "use_robust_z": true,
+  "selected_topk_rows": 10,
+  "raw_factors": [
+    "op_growth_streak2",
+    "rev_growth_streak2"
+  ]
+}

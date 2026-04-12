@@ -1,0 +1,1125 @@
+[data\features\features_phase1__asof=2026-02-18__src=phase1__v=1.parquet]
+market, name, ticker
+
+[data\features\features_phase1__asof=2026-03-13__src=phase1__v=1.parquet]
+market, name, ticker
+
+[data\intermediate\corpcode_ticker_map__asof=2026-03-13.parquet]
+ticker
+
+[data\processed\current_holdings_manual.csv]
+name, ticker
+
+[data\processed\execution_plan__total=100000000__v=2.csv]
+name_final, price, ticker
+
+[data\processed\factors_ttm_acc2__asof=2026-02-18__metric=revenue_op__v=2.parquet]
+name, ticker
+
+[data\processed\factors_ttm_acc2__asof=2026-03-13__metric=revenue_op__v=2.parquet]
+name, ticker
+
+[data\processed\factors_ttm_acc2__asof=2026-03-13__metric=revenue_op__v=3.parquet]
+name, ticker
+
+[data\processed\factors_ttm_acc2__asof=2026-03-13__metric=revenue_op__v=4.parquet]
+name, ticker
+
+[data\processed\factors_ttm_acc2__asof=2026-03-13__metric=revenue_op__v=5.parquet]
+name, ticker
+
+[data\processed\features_live__asof=2026-02-18__metric=revenue_op__v=2.parquet]
+name, ticker
+
+[data\processed\features_live__asof=2026-03-13__metric=revenue_op__v=10.parquet]
+name, ticker
+
+[data\processed\features_live__asof=2026-03-13__metric=revenue_op__v=11.parquet]
+name, ticker
+
+[data\processed\features_live__asof=2026-03-13__metric=revenue_op__v=110.parquet]
+mcap, name, ticker
+
+[data\processed\features_live__asof=2026-03-13__metric=revenue_op__v=12.parquet]
+name, ticker
+
+[data\processed\features_live__asof=2026-03-13__metric=revenue_op__v=205.parquet]
+ticker
+
+[data\processed\features_live__asof=2026-03-13__metric=revenue_op__v=4.parquet]
+name, ticker
+
+[data\processed\features_live__asof=2026-03-13__metric=revenue_op__v=5.parquet]
+name, ticker
+
+[data\processed\features_live__asof=2026-03-13__metric=revenue_op__v=6.parquet]
+name, ticker
+
+[data\processed\features_live__asof=2026-03-13__metric=revenue_op__v=7.parquet]
+name, ticker
+
+[data\processed\features_live__asof=2026-03-13__metric=revenue_op__v=8.parquet]
+name, ticker
+
+[data\processed\features_live__asof=2026-03-13__metric=revenue_op__v=9.parquet]
+name, ticker
+
+[data\processed\fundamentals_quarterly__asof=2026-02-18__src=dart__fs=CFS__y=2016-2025__v=1.parquet]
+name, ticker
+
+[data\processed\fundamentals_quarterly__asof=2026-02-18__src=dart__fs=OFS__y=2016-2025__v=1.parquet]
+name, ticker
+
+[data\processed\fundamentals_quarterly__asof=2026-03-13__src=dart_merged__fs=CFS__y=2016-2025__v=1.parquet]
+name, ticker
+
+[data\processed\fundamentals_quarterly__asof=2026-03-13__src=dart__fs=CFS__y=2016-2025__v=1.parquet]
+name, ticker
+
+[data\processed\fundamentals_quarterly__asof=2026-03-13__src=dart__fs=CFS__y=2023-2025__v=1.parquet]
+name, ticker
+
+[data\processed\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_liq__v=20501.csv]
+name, ticker
+
+[data\processed\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_liq__v=20501.parquet]
+name, ticker
+
+[data\processed\krx_marketdata__asof=2026-02-18__src=pykrx__lookback=365d__v=1.parquet]
+mcap, ticker
+
+[data\processed\krx_marketdata__asof=2026-02-18__src=synthetic_dart__lookback=365d__v=2.parquet]
+close, mcap, ticker
+
+[data\processed\krx_marketdata__asof=2026-02-18__src=synthetic_prices_dart__lookback=365d__v=10.parquet]
+Close, market_cap, mcap, ticker
+
+[data\processed\krx_marketdata__asof=2026-02-18__src=synthetic_prices_dart__lookback=365d__v=11.parquet]
+Close, market_cap, mcap, ticker
+
+[data\processed\krx_marketdata__asof=2026-02-18__src=synthetic_prices_dart__lookback=365d__v=12.parquet]
+Close, market_cap, mcap, ticker
+
+[data\processed\krx_marketdata__asof=2026-02-18__src=synthetic_prices_dart__lookback=365d__v=3.parquet]
+close, mcap, ticker
+
+[data\processed\krx_marketdata__asof=2026-02-18__src=synthetic_prices_dart__lookback=365d__v=4.parquet]
+close, mcap, ticker
+
+[data\processed\krx_marketdata__asof=2026-02-18__src=synthetic_prices_dart__lookback=365d__v=5.parquet]
+close, mcap, ticker
+
+[data\processed\krx_marketdata__asof=2026-02-18__src=synthetic_prices_dart__lookback=365d__v=6.parquet]
+mcap, ticker
+
+[data\processed\krx_marketdata__asof=2026-02-18__src=synthetic_prices_dart__lookback=365d__v=7.parquet]
+mcap, ticker
+
+[data\processed\krx_marketdata__asof=2026-02-18__src=synthetic_prices_dart__lookback=365d__v=8.parquet]
+mcap, ticker
+
+[data\processed\krx_marketdata__asof=2026-02-18__src=synthetic_prices_dart__lookback=365d__v=9.parquet]
+mcap, ticker
+
+[data\processed\krx_marketdata__asof=2026-03-13__src=pykrx__lookback=365d__v=1.parquet]
+Close, close, market_cap, mcap, ticker
+
+[data\processed\krx_master__asof=2026-02-18__src=pykrx__v=1.parquet]
+name, ticker
+
+[data\processed\krx_master__asof=2026-03-13__src=pykrx__v=1.parquet]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_liq__featv=110__target=2026-03-31__full_universe.csv]
+mcap, name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_liq__featv=110__target=2026-03-31__topk.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=10__target=2026-03-31__current_holdings_scored.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=10__target=2026-03-31__full_universe.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=10__target=2026-03-31__topk.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=11__target=2026-03-31__current_holdings_scored.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=11__target=2026-03-31__full_universe.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=11__target=2026-03-31__topk.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=12__target=2026-03-31__current_holdings_scored.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=12__target=2026-03-31__full_universe.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=12__target=2026-03-31__topk.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=4__target=2026-03-31__current_holdings_scored.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=4__target=2026-03-31__full_universe.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=4__target=2026-03-31__topk.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=5__target=2026-03-31__current_holdings_scored.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=5__target=2026-03-31__full_universe.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=5__target=2026-03-31__topk.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=6__target=2026-03-31__current_holdings_scored.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=6__target=2026-03-31__full_universe.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=6__target=2026-03-31__topk.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=7__target=2026-03-31__current_holdings_scored.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=7__target=2026-03-31__full_universe.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=7__target=2026-03-31__topk.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=8__target=2026-03-31__current_holdings_scored.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=8__target=2026-03-31__full_universe.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=8__target=2026-03-31__topk.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=9__target=2026-03-31__current_holdings_scored.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=9__target=2026-03-31__full_universe.csv]
+name, ticker
+
+[data\processed\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=9__target=2026-03-31__topk.csv]
+name, ticker
+
+[data\processed\live_actions__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=2__target=2026-02-28.csv]
+name, ticker
+
+[data\processed\live_actions__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=2__target=2026-02-28__target_portfolio.csv]
+name, ticker
+
+[data\processed\live_actions__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=3__target=2025-11-30.csv]
+name, ticker
+
+[data\processed\live_actions__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=3__target=2025-11-30__target_portfolio.csv]
+name, ticker
+
+[data\processed\live_actions__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_liq__target=2026-03-31__v=2.csv]
+name_final, ticker
+
+[data\processed\live_orders_day1__total=100000000__v=2.csv]
+name_final, price, ticker
+
+[data\processed\live_orders__total=10000000__v=2.csv]
+name_final, price, ticker
+
+[data\processed\my_current_holdings.csv]
+name, ticker
+
+[data\processed\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_liq__v=20501.parquet]
+name, ticker
+
+[data\processed\prices_daily__src=pykrx__start=20160101__asof=2026-02-18__metric=revenue_op__v=1.parquet]
+Close, ticker
+
+[data\processed\prices_daily__src=pykrx__start=20160101__asof=2026-03-13__metric=revenue_op__v=2.parquet]
+Close, ticker
+
+[data\processed\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_liq__v=20501.csv]
+name, ticker
+
+[data\processed\rebalance_report_detail__asof=2026-03-13__target=2026-03-31__strat=D_quality_filter_debt_profitaccel_liq__v=2.csv]
+industry_name, market, mcap, name, price, ticker
+
+[data\processed\rebalance_report_detail__asof=2026-03-13__target=2026-03-31__strat=D_quality_filter_debt_profitaccel_liq__v=3.csv]
+industry_name, market, mcap, name, price, ticker
+
+[data\processed\returns_monthly__src=pykrx__asof=2026-02-18__metric=revenue_op__v=1.parquet]
+ticker
+
+[data\processed\returns_monthly__src=pykrx__asof=2026-03-13__metric=revenue_op__v=1.parquet]
+ticker
+
+[data\processed\shares_industry__asof=2026-02-18__src=dart__y=2024__reprt=11011__v=2.parquet]
+name, ticker
+
+[data\processed\shares_industry__asof=2026-02-18__src=dart__y=2025__reprt=11011__v=1.parquet]
+name, ticker
+
+[data\processed\shares_industry__asof=2026-03-13__src=dart__y=2025__reprt=11011__v=1.parquet]
+name, ticker
+
+[data\processed\universe_panel__asof=2026-03-13__metric=revenue_op__mcap_top=800__trd_bot=0.1__v=1.parquet]
+close, market_cap, mcap, name, ticker
+
+[data\processed\universe_panel__asof=2026-03-13__metric=revenue_op__mcap_top=800__trd_bot=0.1__v=2.parquet]
+close, market_cap, mcap, name, ticker
+
+[data\processed\universe_panel__asof=2026-03-13__metric=revenue_op__mcap_top=800__trd_bot=0.1__v=3.parquet]
+close, market_cap, mcap, name, ticker
+
+[data\processed\universe_panel__asof=2026-03-13__metric=revenue_op__mcap_top=800__trd_bot=0.1__v=4.parquet]
+close, market_cap, mcap, name, ticker
+
+[data\processed\universe_panel__asof=2026-03-13__metric=revenue_op__mcap_top=800__trd_bot=0.1__v=5.parquet]
+close, market_cap, mcap, name, ticker
+
+[data\processed\universe_panel__asof=2026-03-13__metric=revenue_op__mcap_top=800__trd_bot=0.1__v=6.parquet]
+close, market_cap, mcap, name, ticker
+
+[data\processed\universe_panel__asof=2026-03-13__metric=revenue_op__mcap_top=800__trd_bot=0.1__v=7.parquet]
+close, market_cap, mcap, name, ticker
+
+[data\processed\universe__asof=2026-02-18__metric=revenue_op__v=1.csv]
+ticker
+
+[data\processed\universe__asof=2026-02-18__metric=revenue_op__v=1.parquet]
+ticker
+
+[data\processed\universe__asof=2026-03-13__metric=revenue_op__v=1.csv]
+ticker
+
+[data\processed\universe__asof=2026-03-13__src=phase1__mcap_top=800__trd_bot=0.1__v=1.parquet]
+Close, close, market_cap, mcap, name, ticker
+
+[data\features\factor_matrix\features_from_panel__asof=2026-03-13__v=1.parquet]
+ticker
+
+[data\features\factor_matrix\features_from_panel__asof=2026-03-13__v=2.parquet]
+ticker
+
+[data\features\factor_matrix\features_from_panel__asof=2026-03-13__v=3.parquet]
+ticker
+
+[data\features\factor_matrix\features_from_panel__asof=2026-03-13__v=4.parquet]
+ticker
+
+[data\features\factor_matrix\features_from_panel__asof=2026-03-13__v=5.parquet]
+ticker
+
+[data\intermediate\fundamentals_panel\fundamentals_panel__asof=2026-03-13__src=dart_raw_canonical_ticker__v=3.parquet]
+ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=1.csv]
+ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=15__v=10.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=15__v=11.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=15__v=12.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=15__v=3.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=15__v=4.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=15__v=5.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=15__v=6.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=15__v=7.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=15__v=8.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=15__v=9.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=20__v=10.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=20__v=11.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=20__v=12.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=20__v=3.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=20__v=4.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=20__v=5.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=20__v=6.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=20__v=7.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=20__v=8.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=20__v=9.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=30__v=10.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=30__v=11.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=30__v=12.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=30__v=3.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=30__v=4.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=30__v=5.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=30__v=6.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=30__v=7.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=30__v=8.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__k=30__v=9.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__v=1.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\orders__asof=2026-02-18__metric=revenue_op__strategy=B_growth_plus_quality__v=2.parquet]
+market_cap, name, ticker
+
+[data\processed\explainability\portfolio_explain_preview__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=1.csv]
+ticker
+
+[data\processed\explainability\portfolio_explain__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=1.parquet]
+ticker
+
+[data\processed\explainability\portfolio_holdings__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=1.csv]
+market_cap, name, ticker
+
+[data\processed\explainability\portfolio_holdings__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=10.csv]
+market_cap, name, ticker
+
+[data\processed\explainability\portfolio_holdings__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=11.csv]
+market_cap, name, ticker
+
+[data\processed\explainability\portfolio_holdings__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=12.csv]
+market_cap, name, ticker
+
+[data\processed\explainability\portfolio_holdings__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=2.csv]
+market_cap, name, ticker
+
+[data\processed\explainability\portfolio_holdings__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=3.csv]
+market_cap, name, ticker
+
+[data\processed\explainability\portfolio_holdings__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=4.csv]
+market_cap, name, ticker
+
+[data\processed\explainability\portfolio_holdings__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=5.csv]
+market_cap, name, ticker
+
+[data\processed\explainability\portfolio_holdings__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=6.csv]
+market_cap, name, ticker
+
+[data\processed\explainability\portfolio_holdings__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=7.csv]
+market_cap, name, ticker
+
+[data\processed\explainability\portfolio_holdings__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=8.csv]
+market_cap, name, ticker
+
+[data\processed\explainability\portfolio_holdings__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=9.csv]
+market_cap, name, ticker
+
+[data\processed\explainability\portfolio_inputs_long__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=1.parquet]
+ticker
+
+[data\processed\explainability\portfolio_inputs_long__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=10.parquet]
+ticker
+
+[data\processed\explainability\portfolio_inputs_long__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=11.parquet]
+ticker
+
+[data\processed\explainability\portfolio_inputs_long__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=12.parquet]
+ticker
+
+[data\processed\explainability\portfolio_inputs_long__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=2.parquet]
+ticker
+
+[data\processed\explainability\portfolio_inputs_long__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=3.parquet]
+ticker
+
+[data\processed\explainability\portfolio_inputs_long__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=4.parquet]
+ticker
+
+[data\processed\explainability\portfolio_inputs_long__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=5.parquet]
+ticker
+
+[data\processed\explainability\portfolio_inputs_long__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=6.parquet]
+ticker
+
+[data\processed\explainability\portfolio_inputs_long__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=7.parquet]
+ticker
+
+[data\processed\explainability\portfolio_inputs_long__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=8.parquet]
+ticker
+
+[data\processed\explainability\portfolio_inputs_long__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=9.parquet]
+ticker
+
+[data\processed\explainability\portfolio_peers_clean__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=1.parquet]
+ticker
+
+[data\processed\explainability\portfolio_peers__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=11.parquet]
+ticker
+
+[data\processed\explainability\portfolio_peers__asof=2026-02-18__metric=revenue_op__strat=B_growth_plus_quality__v=12.parquet]
+ticker
+
+[data\processed_archive\2026-03-13\execution_plan__total=100000000__v=1.csv]
+name_final, price, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_only__v=5007.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_plus_quality__v=3010.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_accel__v=5003.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_debt__v=5004.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_opincome__v=5002.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_revenue__v=5001.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-02-18__metric=revenue_op__k=10__strat=B_revenue_only__v=5005.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-02-18__metric=revenue_op__k=10__strat=B_revenue_plus_debt__v=5006.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=1.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=2.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=3.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-02-18__metric=revenue_op__k=15__strat=B_growth_plus_quality__v=3015.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-02-18__metric=revenue_op__k=20__strat=B_growth_plus_quality__v=2020.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-02-18__metric=revenue_op__k=30__strat=B_growth_plus_quality__v=2030.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-02-18__metric=revenue_op__k=7__strat=B_growth_plus_quality__v=3007.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_liq__v=14010.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v14a__v=10141.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v14__v=1014.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v15__v=1015.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v16__v=1016.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=10.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=11.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=12.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13020.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13030.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13050.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13070.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=4.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=5.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=6.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=7.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=8.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=9.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=E_profitaccel_core__v=14.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=F_profitability_plus_accel__v=15.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\holdings_snapshot__asof=2026-03-13__metric=revenue_op__k=10__strat=G_margin_quality__v=16.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_only__v=5007.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_plus_quality__v=2010.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_plus_quality__v=3010.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_accel__v=5003.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_debt__v=5004.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_opincome__v=5002.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_revenue__v=5001.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=10__strat=B_revenue_only__v=5005.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=10__strat=B_revenue_plus_debt__v=5006.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=1.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=2.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=3.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=15__strat=B_growth_plus_quality__v=1.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=15__strat=B_growth_plus_quality__v=2015.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=15__strat=B_growth_plus_quality__v=3015.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=15__strat=B_growth_plus_quality__v=999.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=20__strat=B_growth_plus_quality__v=2020.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=30__strat=B_growth_plus_quality__v=2030.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-02-18__metric=revenue_op__k=7__strat=B_growth_plus_quality__v=3007.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_liq__v=14010.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v14a__v=10141.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v14__v=1014.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v15__v=1015.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v16__v=1016.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=10.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=11.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=12.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13020.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13030.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13050.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13070.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=4.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=5.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=6.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=7.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=8.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=9.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=E_profitaccel_core__v=14.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=F_profitability_plus_accel__v=15.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\inputs_long__asof=2026-03-13__metric=revenue_op__k=10__strat=G_margin_quality__v=16.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\latest_scores__asof=2026-02-18__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=2__target=2026-02-28__current_holdings_scored.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\latest_scores__asof=2026-02-18__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=2__target=2026-02-28__full_universe.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\latest_scores__asof=2026-02-18__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=2__target=2026-02-28__topk.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\latest_scores__asof=2026-02-18__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=2__target=2026-03-31__current_holdings_scored.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\latest_scores__asof=2026-02-18__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=2__target=2026-03-31__full_universe.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\latest_scores__asof=2026-02-18__metric=revenue_op__strat=D_quality_filter_debt_profitaccel__featv=2__target=2026-03-31__topk.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_v14a__featv=10__target=2026-03-31__full_universe.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_v14a__featv=10__target=2026-03-31__topk.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_v14__featv=10__target=2026-03-31__full_universe.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_v14__featv=10__target=2026-03-31__topk.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_v15__featv=10__target=2026-03-31__full_universe.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\latest_scores__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_v15__featv=10__target=2026-03-31__topk.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=10__target=2026-03-31.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=10__target=2026-03-31__target_portfolio.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=11__target=2026-03-31.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=11__target=2026-03-31__target_portfolio.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=12__target=2026-03-31.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=12__target=2026-03-31__target_portfolio.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13__target=2026-03-31.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13__target=2026-03-31__target_portfolio.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=4__target=2026-03-31.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=4__target=2026-03-31__target_portfolio.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=5__target=2026-03-31.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=5__target=2026-03-31__target_portfolio.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=6__target=2026-03-31.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=6__target=2026-03-31__target_portfolio.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=7__target=2026-03-31.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=7__target=2026-03-31__target_portfolio.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=8__target=2026-03-31.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=8__target=2026-03-31__target_portfolio.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=9__target=2026-03-31.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=9__target=2026-03-31__target_portfolio.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\live_actions__asof=2026-03-13__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_liq__target=2026-03-31__v=1.csv]
+ticker
+
+[data\processed_archive\2026-03-13\live_orders_day1__total=100000000__v=1.csv]
+name_final, price, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_only__v=5007.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_plus_quality__v=3010.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_plus_quality__v=4102.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_plus_quality__v=4103.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_plus_quality__v=4200.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_plus_quality__v=4201.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_plus_quality__v=4202.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_plus_quality__v=4203.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_plus_quality__v=4204.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_plus_quality__v=4205.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_plus_quality__v=4206.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_accel__v=5003.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_debt__v=5004.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_opincome__v=5002.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_revenue__v=5001.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_revenue_only__v=5005.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=B_revenue_plus_debt__v=5006.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=1.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=2.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=3.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=4102.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=15__strat=B_growth_plus_quality__v=3015.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=15__strat=B_growth_plus_quality__v=4102.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=15__strat=D_quality_filter_debt_profitaccel__v=4102.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=20__strat=B_growth_plus_quality__v=2020.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=20__strat=B_growth_plus_quality__v=4102.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=20__strat=D_quality_filter_debt_profitaccel__v=4102.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=30__strat=B_growth_plus_quality__v=2030.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-02-18__metric=revenue_op__k=7__strat=B_growth_plus_quality__v=3007.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_liq__v=14010.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_liq__v=14101.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v14a__v=10141.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v14__v=1014.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v15__v=1015.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v16__v=1016.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=10.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=11.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=12.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13020.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13030.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13050.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13070.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13101.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=4.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=5.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=6.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=7.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=8.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=9.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=E_profitaccel_core__v=14.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=F_profitability_plus_accel__v=15.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\picks__asof=2026-03-13__metric=revenue_op__k=10__strat=G_margin_quality__v=16.parquet]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_only__v=5007.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-02-18__metric=revenue_op__k=10__strat=B_growth_plus_quality__v=3010.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_accel__v=5003.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_debt__v=5004.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_opincome__v=5002.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-02-18__metric=revenue_op__k=10__strat=B_no_revenue__v=5001.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-02-18__metric=revenue_op__k=10__strat=B_revenue_only__v=5005.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-02-18__metric=revenue_op__k=10__strat=B_revenue_plus_debt__v=5006.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=1.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=2.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-02-18__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=3.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-02-18__metric=revenue_op__k=15__strat=B_growth_plus_quality__v=3015.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-02-18__metric=revenue_op__k=7__strat=B_growth_plus_quality__v=3007.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_liq__v=14010.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_liq__v=14101.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v14a__v=10141.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v14__v=1014.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v15__v=1015.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel_v16__v=1016.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=10.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=11.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=12.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13020.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13030.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13050.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13070.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=13101.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=4.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=5.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=6.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=7.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=8.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=D_quality_filter_debt_profitaccel__v=9.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=E_profitaccel_core__v=14.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=F_profitability_plus_accel__v=15.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_audit__asof=2026-03-13__metric=revenue_op__k=10__strat=G_margin_quality__v=16.csv]
+name, ticker
+
+[data\processed_archive\2026-03-13\rebalance_report_detail__asof=2026-03-13__target=2026-03-31__strat=D_quality_filter_debt_profitaccel_liq__v=1.csv]
+industry_name, market, mcap, name, price, ticker
+

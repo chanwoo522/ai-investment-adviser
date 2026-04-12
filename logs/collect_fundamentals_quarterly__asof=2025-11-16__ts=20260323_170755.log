@@ -1,0 +1,3 @@
+17:07:55 [INFO] year range 2016..2025
+17:07:55 [INFO] mode=universe metric=revenue_op merge_existing=False
+17:07:55 [INFO] primary fs_div=CFS (fallback enabled)

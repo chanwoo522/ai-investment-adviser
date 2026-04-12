@@ -1,0 +1,57 @@
+# Strategy Summary
+
+- asof: `2026-02-18`
+- metric: `revenue_op`
+- strategy: `B_growth_plus_quality`
+- k: `20`
+- v: `12`
+
+## Top Holdings
+
+| ticker | name | weight | score_total | score_core | score_pattern |
+| --- | --- | --- | --- | --- | --- |
+| 005090 | SGC에너지 | 0.05 | 12.582185249416217 | 12.582185249416217 | 0.0 |
+| 082920 | 비츠로셀 | 0.05 | 12.527404100509221 | 12.527404100509221 | 0.0 |
+| 000070 | 삼양홀딩스 | 0.05 | 11.940921314814949 | 11.940921314814949 | 0.0 |
+| 005850 | 에스엘 | 0.05 | 11.967136445042332 | 11.967136445042332 | 0.0 |
+| 000720 | 현대건설 | 0.05 | 11.97041873291973 | 11.97041873291973 | 0.0 |
+| 000720 | 현대건설 | 0.05 | 11.98359054739003 | 11.98359054739003 | 0.0 |
+| 000720 | 현대건설 | 0.05 | 11.998493316709158 | 11.998493316709158 | 0.0 |
+| 000720 | 현대건설 | 0.05 | 11.998807615723608 | 11.998807615723608 | 0.0 |
+| 011790 | SKC | 0.05 | 12.0 | 12.0 | 0.0 |
+| 281740 | 레이크머티리얼즈 | 0.05 | 12.014250804475369 | 12.014250804475369 | 0.0 |
+| 000990 | DB하이텍 | 0.05 | 12.072223633383528 | 12.072223633383528 | 0.0 |
+| 000990 | DB하이텍 | 0.05 | 12.072223633383528 | 12.072223633383528 | 0.0 |
+| 086520 | 에코프로 | 0.05 | 12.114885274270797 | 12.114885274270797 | 0.0 |
+| 003090 | 대웅 | 0.05 | 12.127152455019138 | 12.127152455019138 | 0.0 |
+| 003380 | 하림지주 | 0.05 | 12.201479273878068 | 12.201479273878068 | 0.0 |
+| 229640 | LS에코에너지 | 0.05 | 12.201479273878068 | 12.201479273878068 | 0.0 |
+| 229640 | LS에코에너지 | 0.05 | 12.201479273878068 | 12.201479273878068 | 0.0 |
+| 036930 | 주성엔지니어링 | 0.05 | 12.271137148770359 | 12.271137148770359 | 0.0 |
+| 042700 | 한미반도체 | 0.05 | 12.288727187775496 | 12.288727187775496 | 0.0 |
+| 000990 | DB하이텍 | 0.05 | 11.927776366616472 | 11.927776366616472 | 0.0 |
+
+## Orders
+
+| ticker | action | prev_weight | target_weight | delta_weight | reason_top_features |
+| --- | --- | --- | --- | --- | --- |
+| 005090 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, Revenue_ttm_yoy |
+| 082920 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, OpIncome_ttm_yoy, OpIncome_ttm_yoy |
+| 042700 | BUY | 0.0 | 0.05 | 0.05 | OpIncome_ttm_yoy, Revenue_ttm_yoy, OpIncome_ttm_yoy |
+| 036930 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, Revenue_ttm_yoy |
+| 229640 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, Revenue_ttm_yoy |
+| 229640 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, Revenue_ttm_yoy |
+| 003380 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, Revenue_ttm_yoy |
+| 003090 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, Revenue_ttm_yoy |
+| 086520 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, Revenue_ttm_yoy |
+| 000990 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, Revenue_ttm_yoy |
+| 000990 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, Revenue_ttm_yoy |
+| 281740 | BUY | 0.0 | 0.05 | 0.05 | OpIncome_ttm_yoy, Revenue_ttm_yoy, OpIncome_ttm_yoy |
+| 011790 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, OpIncome_ttm_yoy |
+| 000720 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, Revenue_ttm_yoy |
+| 000720 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, Revenue_ttm_yoy |
+| 000720 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, Revenue_ttm_yoy |
+| 000720 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, Revenue_ttm_yoy |
+| 005850 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, OpIncome_ttm_yoy, OpIncome_ttm_yoy |
+| 000070 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, Revenue_ttm_yoy |
+| 000990 | BUY | 0.0 | 0.05 | 0.05 | Revenue_ttm_yoy, Revenue_ttm_yoy, Revenue_ttm_yoy |

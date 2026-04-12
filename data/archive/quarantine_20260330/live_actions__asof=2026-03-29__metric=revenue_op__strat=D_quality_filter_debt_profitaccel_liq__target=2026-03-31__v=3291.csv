@@ -1,0 +1,11 @@
+﻿ticker,name_final,shares,current_shares,current_weight,target_shares,target_value,score,score_rank,industry_code,industry_name,industry4,target_selection_bucket,target_kept_from_previous,cohort_status,score_availability_reason,filter_status_diag,passed_filters_diag,selected_topk_diag,in_target_topk_diag,current_price_diag,price_date_diag,current_value_diag,is_current,is_target,action,reason
+218410,RFHIC,,,,,,5.188174929908726,1.0,032604,통신 및 방송 장비 제조업,032604,new_or_rank_fill,0.0,,,,,,,,,,0,1,BUY,전략 신규 편입 (rank=1)
+171090,선익시스템,,,,,,4.687160220105934,2.0,032902,특수 목적용 기계 제조업,032902,new_or_rank_fill,0.0,,,,,,,,,,0,1,BUY,전략 신규 편입 (rank=2)
+060280,큐렉소,,,,,,4.499499063518583,3.0,074708,기타 상품 전문 소매업,074708,new_or_rank_fill,0.0,,,,,,,,,,0,1,BUY,전략 신규 편입 (rank=3)
+041920,메디아나,,,,,,4.054977170428522,4.0,032701,의료용 기기 제조업,032701,new_or_rank_fill,0.0,,,,,,,,,,0,1,BUY,전략 신규 편입 (rank=4)
+425420,티에프이,,,,,,4.040411394994715,5.0,032602,전자부품 제조업,032602,new_or_rank_fill,0.0,,,,,,,,,,0,1,BUY,전략 신규 편입 (rank=5)
+042000,카페24,,,,,,3.991892675176144,6.0,106301,"자료처리, 호스팅, 포털 및 기타 인터넷 정보매개 서비스업",106301,new_or_rank_fill,0.0,,,,,,,,,,0,1,BUY,전략 신규 편입 (rank=6)
+131290,티에스이,,,,,,3.926225397318579,7.0,032702,"측정, 시험, 항해, 제어 및 기타 정밀기기 제조업; 광학기기 제외",032702,new_or_rank_fill,0.0,,,,,,,,,,0,1,BUY,전략 신규 편입 (rank=7)
+214150,클래시스,600.0,600.0,0.5825766429919985,,,0.2849782459854147,68.0,032701,의료용 기기 제조업,032701,keep_current_top_n,1.0,in_target_cohort,scored_in_target_cohort,passed,True,1.0,1.0,54000.0,2026-03-27,32400000.0,1,1,HOLD,기존 보유 상위 점수 유지 (rank=68)
+005930,삼성전자,100.0,100.0,0.3231142677335251,,,-2.3445284209451747,150.0,032604,통신 및 방송 장비 제조업,032604,keep_current_top_n,1.0,in_target_cohort,scored_in_target_cohort,passed,True,1.0,1.0,179700.0,2026-03-27,17970000.0,1,1,HOLD,기존 보유 상위 점수 유지 (rank=150)
+058470,리노공업,50.0,50.0,0.0943090892744763,,,,,032602,전자부품 제조업,032602,,,not_in_target_cohort,no_feature_history,excluded_by_filter,False,0.0,0.0,104900.0,2026-03-27,5245000.0,1,0,HOLD_REVIEW,평가 보류 유지 (no_feature_history)

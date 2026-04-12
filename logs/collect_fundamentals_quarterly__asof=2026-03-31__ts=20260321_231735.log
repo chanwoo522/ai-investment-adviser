@@ -1,0 +1,25 @@
+23:17:35 [INFO] year range 2023..2025
+23:17:35 [INFO] mode=missing_only metric=revenue_op merge_existing=True
+23:17:35 [INFO] primary fs_div=CFS (fallback enabled)
+23:17:35 [INFO] explicit tickers rows=2
+23:17:35 [INFO] explicit tickers provided -> restrict mode enabled
+23:17:35 [INFO] corp_codes rows=3914
+23:17:35 [CHECK] corp_code missing ratio=0.000
+23:17:35 [INFO] corp_code usable rows: 2 -> 2
+23:17:35 [INFO] existing fundamentals rows=23 from data\processed\fundamentals_quarterly__asof=2026-03-31__src=dart__fs=CFS__y=2023-2025__v=1.parquet
+23:17:35 [1/2] 058470 리노공업 corp=00369657
+23:17:40 [2/2] 214150 클래시스 corp=01061327
+23:17:45 [OK] saved: data\processed\fundamentals_quarterly__asof=2026-03-31__src=dart__fs=CFS__y=2023-2025__v=1.parquet rows=23 new_rows=23 tickers_ok=2 skipped=0 err=0
+23:17:45 [CHECK] quarter coverage:
+23:17:45   - (2023, 1): 2
+23:17:45   - (2023, 2): 2
+23:17:45   - (2023, 3): 2
+23:17:45   - (2023, 4): 2
+23:17:45   - (2024, 1): 2
+23:17:45   - (2024, 2): 2
+23:17:45   - (2024, 3): 2
+23:17:45   - (2024, 4): 2
+23:17:45   - (2025, 1): 2
+23:17:45   - (2025, 2): 2
+23:17:45   - (2025, 3): 2
+23:17:45   - (2025, 4): 1

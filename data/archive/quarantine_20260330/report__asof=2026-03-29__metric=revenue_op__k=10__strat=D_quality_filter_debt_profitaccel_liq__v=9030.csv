@@ -1,0 +1,2 @@
+﻿asof,metric,strategy,k,tcost_bps,max_per_group,group_col,gross_nav,net_nav,cagr_gross,cagr_net,sharpe_net,maxdd_net,avg_turnover
+2026-03-29,revenue_op,D_quality_filter_debt_profitaccel_liq,10,30.0,0,industry4,39.90679427175633,36.7697675708521,0.4370769291093717,0.4255508387508735,1.3932350818929533,-0.33437137512636905,0.7075000000000001

@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+
+data/_archive/
+data/raw/
+data/processed/
+
+logs/
+runs/
+
+*.zip
+*.parquet
+*.pt
+*.pth
+*.ckpt

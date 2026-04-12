@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Rebalance Report</title>
+<style>
+body {
+  font-family: Arial, "Malgun Gothic", sans-serif;
+  line-height: 1.6;
+  margin: 28px;
+  color: #222;
+}
+h1, h2, h3, h4 { color: #1f2937; }
+code, pre { font-family: Consolas, monospace; }
+.note {
+  background: #f8fafc; border-left: 4px solid #64748b; padding: 10px 12px; border-radius: 6px;
+}
+.table-wrap {
+  overflow-x: auto; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff;
+}
+.summary-table, .factor-table {
+  width: 100%; border-collapse: collapse; font-size: 14px; min-width: 1100px;
+}
+.summary-table thead th, .factor-table thead th {
+  position: sticky; top: 0; background: #f3f4f6; z-index: 1;
+}
+.summary-table th, .summary-table td, .factor-table th, .factor-table td {
+  border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; white-space: nowrap;
+}
+.summary-table tbody tr:nth-child(even) { background: #fafafa; }
+.card {
+  border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin: 16px 0; background: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.grid {
+  display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 12px 20px;
+}
+ul { margin-top: 6px; }
+.section-meta {
+  background: #f8fafc; padding: 12px 14px; border-radius: 10px; border: 1px solid #e5e7eb;
+}
+</style>
+</head>
+<body>
+<h1>리밸런싱 보고서</h1>
+<p>본 보고서는 한국 주식 팩터 기반 분기 리밸런싱 전략의 산출물입니다.
+개별 종목의 절대적 우열 판단이 아니라, 동일 시점 유니버스 내 상대 점수 비교 결과를 반영합니다.</p>
+<div class="section-meta">
+  <ul>
+    <li><strong>기준일(asof):</strong> 2025-11-16</li>
+    <li><strong>목표 리밸런싱일(target):</strong> 2025-11-30</li>
+    <li><strong>전략명:</strong> D_quality_filter_debt_profitaccel_liq</li>
+    <li><strong>전략 설명:</strong> 이익 가속도 중심 + 부채 통제 + 유동성 필터(거래대금+시총)</li>
+  </ul>
+</div>
+
+<h2>1. 유의사항</h2>
+<ul>
+  <li>본 전략은 이익 가속도와 재무 건전성 중심의 상대평가 전략입니다.</li>
+  <li>대형 우량주라도 해당 시점의 점수 경쟁에서 제외될 수 있습니다.</li>
+  <li>반대로 적자 기업이라도 이익 개선 가속이 강하면 편입될 수 있습니다.</li>
+  <li>BUY/SELL는 절대적 우열이 아니라 이번 분기 기준 상대 점수 재정렬 결과입니다.</li>
+</ul>
+
+<h2>2. 요약</h2>
+<ul>
+  <li>BUY 종목 수: <strong>10</strong></li>
+  <li>SELL 종목 수: <strong>3</strong></li>
+  <li>HOLD 종목 수: <strong>0</strong></li>
+</ul>
+
+<h2>3. SCORE 계산 방식</h2>
+<h3>3.1 점수 식</h3>
+<pre><code>Score_raw =  1.00 × z(OpIncome_acc2)<br>           + 0.25 × z(Revenue_acc2)<br>           - 0.35 × z(Debt_to_Equity_log)</code></pre>
+<p><strong>스코어링 방식:</strong> Cross-sectional zscore 기준 조합 / clip_z=3.0 / holding_bonus=0.2 / robust_z=true</p>
+
+<h3>3.2 계산 절차</h3>
+<ul><li>1) 리밸런싱 시점 유니버스를 구성한다.</li><li>2) 전략에서 사용하는 팩터를 계산한다.</li><li>3) 연속형 팩터는 동일 시점 유니버스 내 cross-sectional z-score로 표준화한다.</li><li>4) extreme clipping 설정이 있으면 표준화 점수에 상하한을 적용한다.</li><li>5) 가중합으로 Score_raw를 계산한다.</li><li>6) holding bonus 설정이 있고 현재 보유 종목이면 Score_adj에 보너스를 더한다.</li><li>7) 전략 필터를 적용한 뒤 최종 점수 순으로 상위 종목을 편입한다.</li></ul>
+
+
+<section>
+  <h3>3.3 핵심 팩터 설명</h3>
+  <div class="table-wrap">
+    <table class="factor-table">
+      <thead><tr><th>팩터</th><th>설명</th></tr></thead>
+      <tbody><tr><th>OpIncome_acc2</th><td>최근 구간에서 영업이익 증가 속도가 얼마나 가속되었는지를 나타내는 팩터. 값이 높을수록 영업이익 개선 속도가 빨라진 것으로 해석한다.</td></tr><tr><th>Revenue_acc2</th><td>최근 구간에서 매출 증가 속도가 얼마나 가속되었는지를 나타내는 팩터. 매출 모멘텀의 가속 여부를 본다.</td></tr><tr><th>Debt_to_Equity_log</th><td>부채/자본 비율을 로그 변환한 값. 높을수록 재무 레버리지가 큰 상태로 보고 감점 요인으로 사용한다.</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+
+<h3>3.4 포트폴리오 종목별 SCORE 계산 표시</h3>
+<ul>
+  <li>각 종목에 대해 contrib_op / contrib_rev / contrib_debt / contrib_cfo / contrib_missing를 별도로 출력합니다.</li>
+  <li>score_rebuilt는 위 기여도를 합산해 재구성한 점수입니다.</li>
+  <li>score_diff_vs_reported는 보고서 score와 재구성 score의 차이입니다.</li>
+</ul>
+
+<p class="note">주: <code>score_rebuilt</code>는 보고서 설명을 위해 현재 보유한 표준화 팩터값으로 재구성한 점수입니다.
+실제 포트폴리오 선별에 사용된 최종 점수와는 전처리·클리핑·제약 적용 차이로 인해 다를 수 있습니다.</p>
+
+
+<h3>3.5 필터 / 제약조건</h3>
+<ul><li>Debt_to_Equity_log &lt;= 2.398</li><li>traded_value &gt;= 1000000000</li><li>mcap &gt;= 100000000000</li></ul>
+
+
+<section class="table-section">
+  <h2>4. BUY 종목 요약표</h2>
+  <div class="table-wrap">
+    <table class="summary-table">
+      <caption>ticker: 종목코드 | name: 종목명 | action: 권고 액션 | reason: 선정/제외 사유 | score: 최종 점수 | score_adj: score_adj | hold_bonus_applied: hold_bonus_applied | score_rank: 점수 순위 | score_adj_rank: score_adj_rank | industry4: 업종 코드 | cohort_status: cohort_status | score_availability_reason: score_availability_reason | price: price | mcap: mcap | year: 최근 사용 분기 연도 | quarter: 최근 사용 분기 | revenue: TTM 매출액 | op_income: TTM 영업이익 | net_income: TTM 순이익 | revenue_prev_q: 직전 단일분기 매출액 | revenue_cur_q: 당기 단일분기 매출액 | revenue_qoq: 단일분기 매출 QoQ | op_prev_q: 직전 단일분기 영업이익 | op_cur_q: 당기 단일분기 영업이익 | op_qoq: 단일분기 영업이익 QoQ | op_acc2: 영업이익 증가율 가속도 | rev_acc2: 매출 증가율 가속도 | debt_log: 부채비율 로그값 | cfo_to_assets: CFO/Assets 품질 팩터 | cfo_isnull: CFO 결측 더미 | per: per | pbr: pbr | psr: psr | contrib_op: contrib_op | contrib_rev: contrib_rev | contrib_debt: contrib_debt | score_rebuilt: score_rebuilt | planned_qty: 총 계획 수량 | planned_value: 총 계획 금액 | day1_qty: 1일차 수량 | day1_value: 1일차 금액 | day2_qty: 2일차 수량 | day2_value: 2일차 금액 | day3_qty: 3일차 수량 | day3_value: 3일차 금액 | est_slippage_bps: 예상 슬리피지(bps)</caption>
+      <thead><tr><th>ticker</th><th>name</th><th>action</th><th>reason</th><th>score</th><th>score_adj</th><th>hold_bonus_applied</th><th>score_rank</th><th>score_adj_rank</th><th>industry4</th><th>cohort_status</th><th>score_availability_reason</th><th>price</th><th>mcap</th><th>year</th><th>quarter</th><th>revenue</th><th>op_income</th><th>net_income</th><th>revenue_prev_q</th><th>revenue_cur_q</th><th>revenue_qoq</th><th>op_prev_q</th><th>op_cur_q</th><th>op_qoq</th><th>op_acc2</th><th>rev_acc2</th><th>debt_log</th><th>cfo_to_assets</th><th>cfo_isnull</th><th>per</th><th>pbr</th><th>psr</th><th>contrib_op</th><th>contrib_rev</th><th>contrib_debt</th><th>score_rebuilt</th><th>planned_qty</th><th>planned_value</th><th>day1_qty</th><th>day1_value</th><th>day2_qty</th><th>day2_value</th><th>day3_qty</th><th>day3_value</th><th>est_slippage_bps</th></tr></thead>
+      <tbody><tr><td>005690</td><td>파미셀</td><td>BUY</td><td>전략 신규 편입 (rank=1)</td><td>4.07</td><td>4.074332222001554</td><td>0.0</td><td>1.00</td><td>1.0</td><td>211.0</td><td>-</td><td>-</td><td>17,470</td><td>9,813억원</td><td>2,025</td><td>3</td><td>1,009억원</td><td>278억원</td><td>288억원</td><td>268억원</td><td>256억원</td><td>-0.04</td><td>82억원</td><td>81억원</td><td>-0.00</td><td>17.51</td><td>0.75</td><td>0.16</td><td>0.18</td><td>0</td><td>34.11</td><td>8.89</td><td>9.72</td><td>3.00</td><td>0.75</td><td>0.32</td><td>4.07</td><td>570</td><td>10백만원</td><td>228</td><td>4백만원</td><td>171</td><td>3백만원</td><td>171</td><td>3백만원</td><td>5.00</td></tr><tr><td>095610</td><td>테스</td><td>BUY</td><td>전략 신규 편입 (rank=2)</td><td>4.04</td><td>4.041310994137562</td><td>0.0</td><td>2.00</td><td>2.0</td><td>29271.0</td><td>-</td><td>-</td><td>41,700</td><td>1.31조원</td><td>2,025</td><td>3</td><td>3,207억원</td><td>671억원</td><td>672억원</td><td>821억원</td><td>676억원</td><td>-0.18</td><td>204억원</td><td>84억원</td><td>-0.59</td><td>6.72</td><td>0.87</td><td>0.21</td><td>0.17</td><td>0</td><td>19.44</td><td>3.52</td><td>4.07</td><td>3.00</td><td>0.75</td><td>0.29</td><td>4.04</td><td>237</td><td>10백만원</td><td>95</td><td>4백만원</td><td>71</td><td>3백만원</td><td>71</td><td>3백만원</td><td>5.01</td></tr><tr><td>060280</td><td>큐렉소</td><td>BUY</td><td>전략 신규 편입 (rank=3)</td><td>3.98</td><td>3.978768792842944</td><td>0.0</td><td>3.00</td><td>3.0</td><td>47812.0</td><td>-</td><td>-</td><td>10,670</td><td>7,166억원</td><td>2,025</td><td>3</td><td>686억원</td><td>-5억원</td><td>-44억원</td><td>168억원</td><td>172억원</td><td>0.03</td><td>-2억원</td><td>3억원</td><td>2.66</td><td>2.09</td><td>0.40</td><td>0.09</td><td>-0.07</td><td>0</td><td>-</td><td>7.60</td><td>10.45</td><td>2.99</td><td>0.61</td><td>0.38</td><td>3.98</td><td>936</td><td>10백만원</td><td>374</td><td>4백만원</td><td>281</td><td>3백만원</td><td>281</td><td>3백만원</td><td>5.01</td></tr><tr><td>302440</td><td>SK바이오사이언스</td><td>BUY</td><td>전략 신규 편입 (rank=4)</td><td>3.94</td><td>3.939420576528376</td><td>0.0</td><td>4.00</td><td>4.0</td><td>211.0</td><td>-</td><td>-</td><td>54,600</td><td>3.86조원</td><td>2,025</td><td>3</td><td>6,240억원</td><td>-1,227억원</td><td>-24억원</td><td>1,619억원</td><td>1,508억원</td><td>-0.07</td><td>-374억원</td><td>-194억원</td><td>0.48</td><td>19.92</td><td>2.62</td><td>0.34</td><td>0.02</td><td>0</td><td>-</td><td>1.86</td><td>6.18</td><td>3.00</td><td>0.75</td><td>0.19</td><td>3.94</td><td>181</td><td>10백만원</td><td>73</td><td>4백만원</td><td>54</td><td>3백만원</td><td>54</td><td>3백만원</td><td>5.01</td></tr><tr><td>450080</td><td>에코프로머티</td><td>BUY</td><td>전략 신규 편입 (rank=5)</td><td>3.92</td><td>3.9207299690376978</td><td>0.0</td><td>5.00</td><td>5.0</td><td>28202.0</td><td>-</td><td>-</td><td>62,900</td><td>4.59조원</td><td>2,025</td><td>3</td><td>3,654억원</td><td>-783억원</td><td>1,151억원</td><td>781억원</td><td>632억원</td><td>-0.19</td><td>-288억원</td><td>-251억원</td><td>0.13</td><td>2.58</td><td>0.63</td><td>0.37</td><td>0.03</td><td>0</td><td>39.86</td><td>3.66</td><td>12.56</td><td>3.00</td><td>0.75</td><td>0.17</td><td>3.92</td><td>157</td><td>10백만원</td><td>63</td><td>4백만원</td><td>47</td><td>3백만원</td><td>47</td><td>3백만원</td><td>5.00</td></tr><tr><td>039030</td><td>이오테크닉스</td><td>BUY</td><td>전략 신규 편입 (rank=6)</td><td>3.82</td><td>3.823555736317304</td><td>0.0</td><td>6.00</td><td>6.0</td><td>29271.0</td><td>-</td><td>-</td><td>277,000</td><td>4.50조원</td><td>2,025</td><td>3</td><td>3,703억원</td><td>750억원</td><td>570억원</td><td>943억원</td><td>1,005억원</td><td>0.07</td><td>258억원</td><td>260억원</td><td>0.01</td><td>2.04</td><td>0.36</td><td>0.12</td><td>0.13</td><td>0</td><td>78.85</td><td>6.73</td><td>12.14</td><td>2.91</td><td>0.55</td><td>0.36</td><td>3.82</td><td>34</td><td>9백만원</td><td>14</td><td>4백만원</td><td>10</td><td>3백만원</td><td>10</td><td>3백만원</td><td>5.00</td></tr><tr><td>100840</td><td>SNT에너지</td><td>BUY</td><td>전략 신규 편입 (rank=7)</td><td>3.79</td><td>3.79042436788437</td><td>0.0</td><td>7.00</td><td>7.0</td><td>29176.0</td><td>-</td><td>-</td><td>40,300</td><td>9,803억원</td><td>2,025</td><td>3</td><td>5,000억원</td><td>736억원</td><td>645억원</td><td>1,407억원</td><td>1,483억원</td><td>0.05</td><td>274억원</td><td>243억원</td><td>-0.11</td><td>2.28</td><td>0.80</td><td>0.54</td><td>0.18</td><td>0</td><td>15.20</td><td>2.96</td><td>1.96</td><td>3.00</td><td>0.75</td><td>0.04</td><td>3.79</td><td>247</td><td>10백만원</td><td>99</td><td>4백만원</td><td>74</td><td>3백만원</td><td>74</td><td>3백만원</td><td>5.01</td></tr><tr><td>206650</td><td>유바이오로직스</td><td>BUY</td><td>전략 신규 편입 (rank=8)</td><td>3.75</td><td>3.7512846344031687</td><td>0.0</td><td>8.00</td><td>8.0</td><td>212.0</td><td>-</td><td>-</td><td>13,990</td><td>4,918억원</td><td>2,025</td><td>3</td><td>1,537억원</td><td>637억원</td><td>491억원</td><td>362억원</td><td>411억원</td><td>0.13</td><td>112억원</td><td>189억원</td><td>0.68</td><td>7.96</td><td>0.35</td><td>0.29</td><td>0.32</td><td>0</td><td>10.02</td><td>2.83</td><td>3.20</td><td>3.00</td><td>0.52</td><td>0.23</td><td>3.75</td><td>713</td><td>10백만원</td><td>285</td><td>4백만원</td><td>214</td><td>3백만원</td><td>214</td><td>3백만원</td><td>5.03</td></tr><tr><td>218410</td><td>RFHIC</td><td>BUY</td><td>전략 신규 편입 (rank=9)</td><td>3.72</td><td>3.7179640598406585</td><td>0.0</td><td>9.00</td><td>9.0</td><td>264.0</td><td>-</td><td>-</td><td>30,400</td><td>1.33조원</td><td>2,025</td><td>3</td><td>1,557억원</td><td>219억원</td><td>144억원</td><td>446억원</td><td>405억원</td><td>-0.09</td><td>83억원</td><td>74억원</td><td>-0.11</td><td>4.00</td><td>0.33</td><td>0.30</td><td>0.09</td><td>0</td><td>92.80</td><td>3.57</td><td>8.56</td><td>3.00</td><td>0.50</td><td>0.22</td><td>3.72</td><td>327</td><td>10백만원</td><td>131</td><td>4백만원</td><td>98</td><td>3백만원</td><td>98</td><td>3백만원</td><td>5.01</td></tr><tr><td>036810</td><td>에프에스티</td><td>BUY</td><td>전략 신규 편입 (rank=10)</td><td>3.60</td><td>3.603465125564517</td><td>0.0</td><td>10.00</td><td>10.0</td><td>2629.0</td><td>-</td><td>-</td><td>32,676</td><td>9,312억원</td><td>2,025</td><td>3</td><td>2,881억원</td><td>69억원</td><td>-19억원</td><td>760억원</td><td>655억원</td><td>-0.14</td><td>17억원</td><td>-19억원</td><td>-2.08</td><td>22.84</td><td>0.54</td><td>0.79</td><td>0.05</td><td>0</td><td>-</td><td>3.94</td><td>3.23</td><td>3.00</td><td>0.75</td><td>-0.15</td><td>3.60</td><td>304</td><td>10백만원</td><td>122</td><td>4백만원</td><td>91</td><td>3백만원</td><td>91</td><td>3백만원</td><td>5.01</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+
+<section class="table-section">
+  <h2>5. SELL 종목 요약표</h2>
+  <div class="table-wrap">
+    <table class="summary-table">
+      <caption>ticker: 종목코드 | name: 종목명 | action: 권고 액션 | reason: 선정/제외 사유 | score: 최종 점수 | score_adj: score_adj | hold_bonus_applied: hold_bonus_applied | score_rank: 점수 순위 | score_adj_rank: score_adj_rank | industry4: 업종 코드 | cohort_status: cohort_status | score_availability_reason: score_availability_reason | price: price | mcap: mcap | year: 최근 사용 분기 연도 | quarter: 최근 사용 분기 | revenue: TTM 매출액 | op_income: TTM 영업이익 | net_income: TTM 순이익 | revenue_prev_q: 직전 단일분기 매출액 | revenue_cur_q: 당기 단일분기 매출액 | revenue_qoq: 단일분기 매출 QoQ | op_prev_q: 직전 단일분기 영업이익 | op_cur_q: 당기 단일분기 영업이익 | op_qoq: 단일분기 영업이익 QoQ | op_acc2: 영업이익 증가율 가속도 | rev_acc2: 매출 증가율 가속도 | debt_log: 부채비율 로그값 | cfo_to_assets: CFO/Assets 품질 팩터 | cfo_isnull: CFO 결측 더미 | per: per | pbr: pbr | psr: psr | contrib_op: contrib_op | contrib_rev: contrib_rev | contrib_debt: contrib_debt | score_rebuilt: score_rebuilt | planned_qty: 총 계획 수량 | planned_value: 총 계획 금액 | day1_qty: 1일차 수량 | day1_value: 1일차 금액 | day2_qty: 2일차 수량 | day2_value: 2일차 금액 | day3_qty: 3일차 수량 | day3_value: 3일차 금액 | est_slippage_bps: 예상 슬리피지(bps)</caption>
+      <thead><tr><th>ticker</th><th>name</th><th>action</th><th>reason</th><th>score</th><th>score_adj</th><th>hold_bonus_applied</th><th>score_rank</th><th>score_adj_rank</th><th>industry4</th><th>cohort_status</th><th>score_availability_reason</th><th>price</th><th>mcap</th><th>year</th><th>quarter</th><th>revenue</th><th>op_income</th><th>net_income</th><th>revenue_prev_q</th><th>revenue_cur_q</th><th>revenue_qoq</th><th>op_prev_q</th><th>op_cur_q</th><th>op_qoq</th><th>op_acc2</th><th>rev_acc2</th><th>debt_log</th><th>cfo_to_assets</th><th>cfo_isnull</th><th>per</th><th>pbr</th><th>psr</th><th>contrib_op</th><th>contrib_rev</th><th>contrib_debt</th><th>score_rebuilt</th><th>planned_qty</th><th>planned_value</th><th>day1_qty</th><th>day1_value</th><th>day2_qty</th><th>day2_value</th><th>day3_qty</th><th>day3_value</th><th>est_slippage_bps</th></tr></thead>
+      <tbody><tr><td>005930</td><td>삼성전자</td><td>SELL</td><td>전략 탈락 (universe_rank=423)</td><td>-2.85</td><td>-2.646052781185924</td><td>0.2</td><td>423.00</td><td>419.0</td><td>264.0</td><td>in_target_cohort</td><td>scored_in_target_cohort</td><td>97,200</td><td>1,081.72조원</td><td>2,025</td><td>3</td><td>315.56조원</td><td>30.02조원</td><td>33.32조원</td><td>74.57조원</td><td>86.06조원</td><td>0.15</td><td>4.68조원</td><td>12.17조원</td><td>1.60</td><td>-2.58</td><td>-0.04</td><td>0.24</td><td>0.15</td><td>0</td><td>32.47</td><td>2.62</td><td>3.43</td><td>-3.00</td><td>-0.12</td><td>0.27</td><td>-2.85</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr><tr><td>058470</td><td>리노공업</td><td>SELL</td><td>전략 탈락 (universe_rank=76)</td><td>1.59</td><td>1.7887687752954384</td><td>0.2</td><td>76.00</td><td>71.0</td><td>2629.0</td><td>in_target_cohort</td><td>scored_in_target_cohort</td><td>56,500</td><td>1.49조원</td><td>2,025</td><td>3</td><td>3,712억원</td><td>1,737억원</td><td>1,507억원</td><td>1,125억원</td><td>968억원</td><td>-0.14</td><td>534억원</td><td>483억원</td><td>-0.10</td><td>0.30</td><td>0.45</td><td>0.10</td><td>0.23</td><td>0</td><td>9.86</td><td>2.16</td><td>4.00</td><td>0.52</td><td>0.70</td><td>0.37</td><td>1.59</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr><tr><td>214150</td><td>클래시스</td><td>SELL</td><td>전략 탈락 (universe_rank=106)</td><td>0.96</td><td>1.1576203752957266</td><td>0.2</td><td>106.00</td><td>98.0</td><td>271.0</td><td>in_target_cohort</td><td>scored_in_target_cohort</td><td>56,100</td><td>4.15조원</td><td>2,025</td><td>3</td><td>3,178억원</td><td>1,552억원</td><td>1,177억원</td><td>833억원</td><td>830억원</td><td>-0.00</td><td>430억원</td><td>376억원</td><td>-0.13</td><td>0.18</td><td>0.23</td><td>0.23</td><td>0.17</td><td>0</td><td>35.29</td><td>8.01</td><td>13.07</td><td>0.35</td><td>0.34</td><td>0.27</td><td>0.96</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td><td>-</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<section><h2>6. REVIEW 종목 요약표</h2><p>없음</p></section>
+
+<section>
+  <h2>7. BUY 종목 상세</h2>
+  
+<article class="card">
+  <h3>파미셀 (005690)</h3>
+  <div class="grid">
+    <section>
+      <h4>기본</h4>
+      <ul>
+        <li><strong>액션:</strong> BUY</li>
+        <li><strong>사유:</strong> 전략 신규 편입 (rank=1)</li>
+        <li><strong>보고서 SCORE:</strong> 4.0743 / rank 1</li>
+        <li><strong>조정 SCORE:</strong> 4.0743</li>
+        <li><strong>holding bonus:</strong> 0.0000</li>
+        <li><strong>재구성 SCORE:</strong> 4.0743</li>
+        <li><strong>SCORE 차이:</strong> 0.0000</li>
+        <li><strong>industry4:</strong> 211</li>
+        
+        <li><strong>cohort_status:</strong> -</li>
+        <li><strong>score_availability_reason:</strong> -</li>
+        <li><strong>latest_available_rebalance_month:</strong> -</li>
+        <li><strong>latest_available_year/quarter:</strong> - / -</li>
+        <li><strong>현재가:</strong> 17,470</li>
+        <li><strong>시가총액:</strong> 9,813억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>재무</h4>
+      <ul>
+        <li><strong>기준연도/분기:</strong> 2025 / 3</li>
+        <li><strong>매출(TTM):</strong> 1,009억원</li>
+        <li><strong>영업이익(TTM):</strong> 278억원</li>
+        <li><strong>순이익(TTM):</strong> 288억원</li>
+        <li><strong>직전 단분기 매출:</strong> 268억원</li>
+        <li><strong>당기 단분기 매출:</strong> 256억원</li>
+        <li><strong>단분기 매출 QoQ:</strong> -0.0417</li>
+        <li><strong>직전 단분기 영업이익:</strong> 82억원</li>
+        <li><strong>당기 단분기 영업이익:</strong> 81억원</li>
+        <li><strong>단분기 영업이익 QoQ:</strong> -0.0028</li>
+        <li><strong>영업현금흐름(CFO):</strong> 239억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>팩터</h4>
+      <ul>
+        <li><strong>OpIncome_acc2:</strong> 17.5104</li>
+        <li><strong>Revenue_acc2:</strong> 0.7533</li>
+        <li><strong>Debt_to_Equity_log:</strong> 0.1634</li>
+        <li><strong>Quality_CFO_to_Assets:</strong> 0.1837</li>
+        <li><strong>CFO_isnull:</strong> 0</li>
+      </ul>
+    </section>
+    <section>
+      <h4>스코어 기여도</h4>
+      <ul>
+        <li><strong>contrib_op:</strong> 3.0000</li>
+        <li><strong>contrib_rev:</strong> 0.7500</li>
+        <li><strong>contrib_debt:</strong> 0.3243</li>
+        <li><strong>contrib_cfo:</strong> -</li>
+        <li><strong>contrib_missing:</strong> -</li>
+      </ul>
+    </section>
+    <section>
+      <h4>멀티플</h4>
+      <ul><li><strong>PER:</strong> 34.11</li><li><strong>PBR:</strong> 8.89</li><li><strong>PSR:</strong> 9.72</li><li><strong>EV/EBIT:</strong> 35.97</li></ul>
+    </section>
+    <section>
+      <h4>실행 계획</h4>
+      <ul>
+        <li><strong>총 목표 주문수량:</strong> 570주</li>
+        <li><strong>총 목표 주문금액:</strong> 10백만원</li>
+        <li><strong>Day1:</strong> 228주 / 4백만원</li>
+        <li><strong>Day2:</strong> 171주 / 3백만원</li>
+        <li><strong>Day3:</strong> 171주 / 3백만원</li>
+        <li><strong>예상 슬리피지:</strong> 5.001 bps</li>
+      </ul>
+    </section>
+  </div>
+</article>
+
+<article class="card">
+  <h3>테스 (095610)</h3>
+  <div class="grid">
+    <section>
+      <h4>기본</h4>
+      <ul>
+        <li><strong>액션:</strong> BUY</li>
+        <li><strong>사유:</strong> 전략 신규 편입 (rank=2)</li>
+        <li><strong>보고서 SCORE:</strong> 4.0413 / rank 2</li>
+        <li><strong>조정 SCORE:</strong> 4.0413</li>
+        <li><strong>holding bonus:</strong> 0.0000</li>
+        <li><strong>재구성 SCORE:</strong> 4.0413</li>
+        <li><strong>SCORE 차이:</strong> 0.0000</li>
+        <li><strong>industry4:</strong> 29271</li>
+        
+        <li><strong>cohort_status:</strong> -</li>
+        <li><strong>score_availability_reason:</strong> -</li>
+        <li><strong>latest_available_rebalance_month:</strong> -</li>
+        <li><strong>latest_available_year/quarter:</strong> - / -</li>
+        <li><strong>현재가:</strong> 41,700</li>
+        <li><strong>시가총액:</strong> 1.31조원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>재무</h4>
+      <ul>
+        <li><strong>기준연도/분기:</strong> 2025 / 3</li>
+        <li><strong>매출(TTM):</strong> 3,207억원</li>
+        <li><strong>영업이익(TTM):</strong> 671억원</li>
+        <li><strong>순이익(TTM):</strong> 672억원</li>
+        <li><strong>직전 단분기 매출:</strong> 821억원</li>
+        <li><strong>당기 단분기 매출:</strong> 676억원</li>
+        <li><strong>단분기 매출 QoQ:</strong> -0.1766</li>
+        <li><strong>직전 단분기 영업이익:</strong> 204억원</li>
+        <li><strong>당기 단분기 영업이익:</strong> 84억원</li>
+        <li><strong>단분기 영업이익 QoQ:</strong> -0.5868</li>
+        <li><strong>영업현금흐름(CFO):</strong> 768억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>팩터</h4>
+      <ul>
+        <li><strong>OpIncome_acc2:</strong> 6.7158</li>
+        <li><strong>Revenue_acc2:</strong> 0.8727</li>
+        <li><strong>Debt_to_Equity_log:</strong> 0.2073</li>
+        <li><strong>Quality_CFO_to_Assets:</strong> 0.1685</li>
+        <li><strong>CFO_isnull:</strong> 0</li>
+      </ul>
+    </section>
+    <section>
+      <h4>스코어 기여도</h4>
+      <ul>
+        <li><strong>contrib_op:</strong> 3.0000</li>
+        <li><strong>contrib_rev:</strong> 0.7500</li>
+        <li><strong>contrib_debt:</strong> 0.2913</li>
+        <li><strong>contrib_cfo:</strong> -</li>
+        <li><strong>contrib_missing:</strong> -</li>
+      </ul>
+    </section>
+    <section>
+      <h4>멀티플</h4>
+      <ul><li><strong>PER:</strong> 19.44</li><li><strong>PBR:</strong> 3.52</li><li><strong>PSR:</strong> 4.07</li><li><strong>EV/EBIT:</strong> 20.75</li></ul>
+    </section>
+    <section>
+      <h4>실행 계획</h4>
+      <ul>
+        <li><strong>총 목표 주문수량:</strong> 237주</li>
+        <li><strong>총 목표 주문금액:</strong> 10백만원</li>
+        <li><strong>Day1:</strong> 95주 / 4백만원</li>
+        <li><strong>Day2:</strong> 71주 / 3백만원</li>
+        <li><strong>Day3:</strong> 71주 / 3백만원</li>
+        <li><strong>예상 슬리피지:</strong> 5.006 bps</li>
+      </ul>
+    </section>
+  </div>
+</article>
+
+<article class="card">
+  <h3>큐렉소 (060280)</h3>
+  <div class="grid">
+    <section>
+      <h4>기본</h4>
+      <ul>
+        <li><strong>액션:</strong> BUY</li>
+        <li><strong>사유:</strong> 전략 신규 편입 (rank=3)</li>
+        <li><strong>보고서 SCORE:</strong> 3.9788 / rank 3</li>
+        <li><strong>조정 SCORE:</strong> 3.9788</li>
+        <li><strong>holding bonus:</strong> 0.0000</li>
+        <li><strong>재구성 SCORE:</strong> 3.9788</li>
+        <li><strong>SCORE 차이:</strong> -0.0000</li>
+        <li><strong>industry4:</strong> 47812</li>
+        
+        <li><strong>cohort_status:</strong> -</li>
+        <li><strong>score_availability_reason:</strong> -</li>
+        <li><strong>latest_available_rebalance_month:</strong> -</li>
+        <li><strong>latest_available_year/quarter:</strong> - / -</li>
+        <li><strong>현재가:</strong> 10,670</li>
+        <li><strong>시가총액:</strong> 7,166억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>재무</h4>
+      <ul>
+        <li><strong>기준연도/분기:</strong> 2025 / 3</li>
+        <li><strong>매출(TTM):</strong> 686억원</li>
+        <li><strong>영업이익(TTM):</strong> -5억원</li>
+        <li><strong>순이익(TTM):</strong> -44억원</li>
+        <li><strong>직전 단분기 매출:</strong> 168억원</li>
+        <li><strong>당기 단분기 매출:</strong> 172억원</li>
+        <li><strong>단분기 매출 QoQ:</strong> 0.0258</li>
+        <li><strong>직전 단분기 영업이익:</strong> -2억원</li>
+        <li><strong>당기 단분기 영업이익:</strong> 3억원</li>
+        <li><strong>단분기 영업이익 QoQ:</strong> 2.6610</li>
+        <li><strong>영업현금흐름(CFO):</strong> -71억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>팩터</h4>
+      <ul>
+        <li><strong>OpIncome_acc2:</strong> 2.0928</li>
+        <li><strong>Revenue_acc2:</strong> 0.4025</li>
+        <li><strong>Debt_to_Equity_log:</strong> 0.0946</li>
+        <li><strong>Quality_CFO_to_Assets:</strong> -0.0686</li>
+        <li><strong>CFO_isnull:</strong> 0</li>
+      </ul>
+    </section>
+    <section>
+      <h4>스코어 기여도</h4>
+      <ul>
+        <li><strong>contrib_op:</strong> 2.9884</li>
+        <li><strong>contrib_rev:</strong> 0.6143</li>
+        <li><strong>contrib_debt:</strong> 0.3761</li>
+        <li><strong>contrib_cfo:</strong> -</li>
+        <li><strong>contrib_missing:</strong> -</li>
+      </ul>
+    </section>
+    <section>
+      <h4>멀티플</h4>
+      <ul><li><strong>PBR:</strong> 7.60</li><li><strong>PSR:</strong> 10.45</li></ul>
+    </section>
+    <section>
+      <h4>실행 계획</h4>
+      <ul>
+        <li><strong>총 목표 주문수량:</strong> 936주</li>
+        <li><strong>총 목표 주문금액:</strong> 10백만원</li>
+        <li><strong>Day1:</strong> 374주 / 4백만원</li>
+        <li><strong>Day2:</strong> 281주 / 3백만원</li>
+        <li><strong>Day3:</strong> 281주 / 3백만원</li>
+        <li><strong>예상 슬리피지:</strong> 5.010 bps</li>
+      </ul>
+    </section>
+  </div>
+</article>
+
+<article class="card">
+  <h3>SK바이오사이언스 (302440)</h3>
+  <div class="grid">
+    <section>
+      <h4>기본</h4>
+      <ul>
+        <li><strong>액션:</strong> BUY</li>
+        <li><strong>사유:</strong> 전략 신규 편입 (rank=4)</li>
+        <li><strong>보고서 SCORE:</strong> 3.9394 / rank 4</li>
+        <li><strong>조정 SCORE:</strong> 3.9394</li>
+        <li><strong>holding bonus:</strong> 0.0000</li>
+        <li><strong>재구성 SCORE:</strong> 3.9394</li>
+        <li><strong>SCORE 차이:</strong> -0.0000</li>
+        <li><strong>industry4:</strong> 211</li>
+        
+        <li><strong>cohort_status:</strong> -</li>
+        <li><strong>score_availability_reason:</strong> -</li>
+        <li><strong>latest_available_rebalance_month:</strong> -</li>
+        <li><strong>latest_available_year/quarter:</strong> - / -</li>
+        <li><strong>현재가:</strong> 54,600</li>
+        <li><strong>시가총액:</strong> 3.86조원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>재무</h4>
+      <ul>
+        <li><strong>기준연도/분기:</strong> 2025 / 3</li>
+        <li><strong>매출(TTM):</strong> 6,240억원</li>
+        <li><strong>영업이익(TTM):</strong> -1,227억원</li>
+        <li><strong>순이익(TTM):</strong> -24억원</li>
+        <li><strong>직전 단분기 매출:</strong> 1,619억원</li>
+        <li><strong>당기 단분기 매출:</strong> 1,508억원</li>
+        <li><strong>단분기 매출 QoQ:</strong> -0.0685</li>
+        <li><strong>직전 단분기 영업이익:</strong> -374억원</li>
+        <li><strong>당기 단분기 영업이익:</strong> -194억원</li>
+        <li><strong>단분기 영업이익 QoQ:</strong> 0.4820</li>
+        <li><strong>영업현금흐름(CFO):</strong> 659억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>팩터</h4>
+      <ul>
+        <li><strong>OpIncome_acc2:</strong> 19.9237</li>
+        <li><strong>Revenue_acc2:</strong> 2.6198</li>
+        <li><strong>Debt_to_Equity_log:</strong> 0.3427</li>
+        <li><strong>Quality_CFO_to_Assets:</strong> 0.0225</li>
+        <li><strong>CFO_isnull:</strong> 0</li>
+      </ul>
+    </section>
+    <section>
+      <h4>스코어 기여도</h4>
+      <ul>
+        <li><strong>contrib_op:</strong> 3.0000</li>
+        <li><strong>contrib_rev:</strong> 0.7500</li>
+        <li><strong>contrib_debt:</strong> 0.1894</li>
+        <li><strong>contrib_cfo:</strong> -</li>
+        <li><strong>contrib_missing:</strong> -</li>
+      </ul>
+    </section>
+    <section>
+      <h4>멀티플</h4>
+      <ul><li><strong>PBR:</strong> 1.86</li><li><strong>PSR:</strong> 6.18</li></ul>
+    </section>
+    <section>
+      <h4>실행 계획</h4>
+      <ul>
+        <li><strong>총 목표 주문수량:</strong> 181주</li>
+        <li><strong>총 목표 주문금액:</strong> 10백만원</li>
+        <li><strong>Day1:</strong> 73주 / 4백만원</li>
+        <li><strong>Day2:</strong> 54주 / 3백만원</li>
+        <li><strong>Day3:</strong> 54주 / 3백만원</li>
+        <li><strong>예상 슬리피지:</strong> 5.006 bps</li>
+      </ul>
+    </section>
+  </div>
+</article>
+
+<article class="card">
+  <h3>에코프로머티 (450080)</h3>
+  <div class="grid">
+    <section>
+      <h4>기본</h4>
+      <ul>
+        <li><strong>액션:</strong> BUY</li>
+        <li><strong>사유:</strong> 전략 신규 편입 (rank=5)</li>
+        <li><strong>보고서 SCORE:</strong> 3.9207 / rank 5</li>
+        <li><strong>조정 SCORE:</strong> 3.9207</li>
+        <li><strong>holding bonus:</strong> 0.0000</li>
+        <li><strong>재구성 SCORE:</strong> 3.9207</li>
+        <li><strong>SCORE 차이:</strong> 0.0000</li>
+        <li><strong>industry4:</strong> 28202</li>
+        
+        <li><strong>cohort_status:</strong> -</li>
+        <li><strong>score_availability_reason:</strong> -</li>
+        <li><strong>latest_available_rebalance_month:</strong> -</li>
+        <li><strong>latest_available_year/quarter:</strong> - / -</li>
+        <li><strong>현재가:</strong> 62,900</li>
+        <li><strong>시가총액:</strong> 4.59조원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>재무</h4>
+      <ul>
+        <li><strong>기준연도/분기:</strong> 2025 / 3</li>
+        <li><strong>매출(TTM):</strong> 3,654억원</li>
+        <li><strong>영업이익(TTM):</strong> -783억원</li>
+        <li><strong>순이익(TTM):</strong> 1,151억원</li>
+        <li><strong>직전 단분기 매출:</strong> 781억원</li>
+        <li><strong>당기 단분기 매출:</strong> 632억원</li>
+        <li><strong>단분기 매출 QoQ:</strong> -0.1910</li>
+        <li><strong>직전 단분기 영업이익:</strong> -288억원</li>
+        <li><strong>당기 단분기 영업이익:</strong> -251억원</li>
+        <li><strong>단분기 영업이익 QoQ:</strong> 0.1267</li>
+        <li><strong>영업현금흐름(CFO):</strong> 570억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>팩터</h4>
+      <ul>
+        <li><strong>OpIncome_acc2:</strong> 2.5776</li>
+        <li><strong>Revenue_acc2:</strong> 0.6332</li>
+        <li><strong>Debt_to_Equity_log:</strong> 0.3675</li>
+        <li><strong>Quality_CFO_to_Assets:</strong> 0.0315</li>
+        <li><strong>CFO_isnull:</strong> 0</li>
+      </ul>
+    </section>
+    <section>
+      <h4>스코어 기여도</h4>
+      <ul>
+        <li><strong>contrib_op:</strong> 3.0000</li>
+        <li><strong>contrib_rev:</strong> 0.7500</li>
+        <li><strong>contrib_debt:</strong> 0.1707</li>
+        <li><strong>contrib_cfo:</strong> -</li>
+        <li><strong>contrib_missing:</strong> -</li>
+      </ul>
+    </section>
+    <section>
+      <h4>멀티플</h4>
+      <ul><li><strong>PER:</strong> 39.86</li><li><strong>PBR:</strong> 3.66</li><li><strong>PSR:</strong> 12.56</li></ul>
+    </section>
+    <section>
+      <h4>실행 계획</h4>
+      <ul>
+        <li><strong>총 목표 주문수량:</strong> 157주</li>
+        <li><strong>총 목표 주문금액:</strong> 10백만원</li>
+        <li><strong>Day1:</strong> 63주 / 4백만원</li>
+        <li><strong>Day2:</strong> 47주 / 3백만원</li>
+        <li><strong>Day3:</strong> 47주 / 3백만원</li>
+        <li><strong>예상 슬리피지:</strong> 5.002 bps</li>
+      </ul>
+    </section>
+  </div>
+</article>
+
+<article class="card">
+  <h3>이오테크닉스 (039030)</h3>
+  <div class="grid">
+    <section>
+      <h4>기본</h4>
+      <ul>
+        <li><strong>액션:</strong> BUY</li>
+        <li><strong>사유:</strong> 전략 신규 편입 (rank=6)</li>
+        <li><strong>보고서 SCORE:</strong> 3.8236 / rank 6</li>
+        <li><strong>조정 SCORE:</strong> 3.8236</li>
+        <li><strong>holding bonus:</strong> 0.0000</li>
+        <li><strong>재구성 SCORE:</strong> 3.8236</li>
+        <li><strong>SCORE 차이:</strong> 0.0000</li>
+        <li><strong>industry4:</strong> 29271</li>
+        
+        <li><strong>cohort_status:</strong> -</li>
+        <li><strong>score_availability_reason:</strong> -</li>
+        <li><strong>latest_available_rebalance_month:</strong> -</li>
+        <li><strong>latest_available_year/quarter:</strong> - / -</li>
+        <li><strong>현재가:</strong> 277,000</li>
+        <li><strong>시가총액:</strong> 4.50조원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>재무</h4>
+      <ul>
+        <li><strong>기준연도/분기:</strong> 2025 / 3</li>
+        <li><strong>매출(TTM):</strong> 3,703억원</li>
+        <li><strong>영업이익(TTM):</strong> 750억원</li>
+        <li><strong>순이익(TTM):</strong> 570억원</li>
+        <li><strong>직전 단분기 매출:</strong> 943억원</li>
+        <li><strong>당기 단분기 매출:</strong> 1,005억원</li>
+        <li><strong>단분기 매출 QoQ:</strong> 0.0665</li>
+        <li><strong>직전 단분기 영업이익:</strong> 258억원</li>
+        <li><strong>당기 단분기 영업이익:</strong> 260억원</li>
+        <li><strong>단분기 영업이익 QoQ:</strong> 0.0069</li>
+        <li><strong>영업현금흐름(CFO):</strong> 1,012억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>팩터</h4>
+      <ul>
+        <li><strong>OpIncome_acc2:</strong> 2.0385</li>
+        <li><strong>Revenue_acc2:</strong> 0.3638</li>
+        <li><strong>Debt_to_Equity_log:</strong> 0.1168</li>
+        <li><strong>Quality_CFO_to_Assets:</strong> 0.1348</li>
+        <li><strong>CFO_isnull:</strong> 0</li>
+      </ul>
+    </section>
+    <section>
+      <h4>스코어 기여도</h4>
+      <ul>
+        <li><strong>contrib_op:</strong> 2.9134</li>
+        <li><strong>contrib_rev:</strong> 0.5508</li>
+        <li><strong>contrib_debt:</strong> 0.3594</li>
+        <li><strong>contrib_cfo:</strong> -</li>
+        <li><strong>contrib_missing:</strong> -</li>
+      </ul>
+    </section>
+    <section>
+      <h4>멀티플</h4>
+      <ul><li><strong>PER:</strong> 78.85</li><li><strong>PBR:</strong> 6.73</li><li><strong>PSR:</strong> 12.14</li><li><strong>EV/EBIT:</strong> 61.09</li></ul>
+    </section>
+    <section>
+      <h4>실행 계획</h4>
+      <ul>
+        <li><strong>총 목표 주문수량:</strong> 34주</li>
+        <li><strong>총 목표 주문금액:</strong> 9백만원</li>
+        <li><strong>Day1:</strong> 14주 / 4백만원</li>
+        <li><strong>Day2:</strong> 10주 / 3백만원</li>
+        <li><strong>Day3:</strong> 10주 / 3백만원</li>
+        <li><strong>예상 슬리피지:</strong> 5.002 bps</li>
+      </ul>
+    </section>
+  </div>
+</article>
+
+<article class="card">
+  <h3>SNT에너지 (100840)</h3>
+  <div class="grid">
+    <section>
+      <h4>기본</h4>
+      <ul>
+        <li><strong>액션:</strong> BUY</li>
+        <li><strong>사유:</strong> 전략 신규 편입 (rank=7)</li>
+        <li><strong>보고서 SCORE:</strong> 3.7904 / rank 7</li>
+        <li><strong>조정 SCORE:</strong> 3.7904</li>
+        <li><strong>holding bonus:</strong> 0.0000</li>
+        <li><strong>재구성 SCORE:</strong> 3.7904</li>
+        <li><strong>SCORE 차이:</strong> 0.0000</li>
+        <li><strong>industry4:</strong> 29176</li>
+        
+        <li><strong>cohort_status:</strong> -</li>
+        <li><strong>score_availability_reason:</strong> -</li>
+        <li><strong>latest_available_rebalance_month:</strong> -</li>
+        <li><strong>latest_available_year/quarter:</strong> - / -</li>
+        <li><strong>현재가:</strong> 40,300</li>
+        <li><strong>시가총액:</strong> 9,803억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>재무</h4>
+      <ul>
+        <li><strong>기준연도/분기:</strong> 2025 / 3</li>
+        <li><strong>매출(TTM):</strong> 5,000억원</li>
+        <li><strong>영업이익(TTM):</strong> 736억원</li>
+        <li><strong>순이익(TTM):</strong> 645억원</li>
+        <li><strong>직전 단분기 매출:</strong> 1,407억원</li>
+        <li><strong>당기 단분기 매출:</strong> 1,483억원</li>
+        <li><strong>단분기 매출 QoQ:</strong> 0.0542</li>
+        <li><strong>직전 단분기 영업이익:</strong> 274억원</li>
+        <li><strong>당기 단분기 영업이익:</strong> 243억원</li>
+        <li><strong>단분기 영업이익 QoQ:</strong> -0.1114</li>
+        <li><strong>영업현금흐름(CFO):</strong> 1,025억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>팩터</h4>
+      <ul>
+        <li><strong>OpIncome_acc2:</strong> 2.2768</li>
+        <li><strong>Revenue_acc2:</strong> 0.7983</li>
+        <li><strong>Debt_to_Equity_log:</strong> 0.5407</li>
+        <li><strong>Quality_CFO_to_Assets:</strong> 0.1802</li>
+        <li><strong>CFO_isnull:</strong> 0</li>
+      </ul>
+    </section>
+    <section>
+      <h4>스코어 기여도</h4>
+      <ul>
+        <li><strong>contrib_op:</strong> 3.0000</li>
+        <li><strong>contrib_rev:</strong> 0.7500</li>
+        <li><strong>contrib_debt:</strong> 0.0404</li>
+        <li><strong>contrib_cfo:</strong> -</li>
+        <li><strong>contrib_missing:</strong> -</li>
+      </ul>
+    </section>
+    <section>
+      <h4>멀티플</h4>
+      <ul><li><strong>PER:</strong> 15.20</li><li><strong>PBR:</strong> 2.96</li><li><strong>PSR:</strong> 1.96</li><li><strong>EV/EBIT:</strong> 16.55</li></ul>
+    </section>
+    <section>
+      <h4>실행 계획</h4>
+      <ul>
+        <li><strong>총 목표 주문수량:</strong> 247주</li>
+        <li><strong>총 목표 주문금액:</strong> 10백만원</li>
+        <li><strong>Day1:</strong> 99주 / 4백만원</li>
+        <li><strong>Day2:</strong> 74주 / 3백만원</li>
+        <li><strong>Day3:</strong> 74주 / 3백만원</li>
+        <li><strong>예상 슬리피지:</strong> 5.008 bps</li>
+      </ul>
+    </section>
+  </div>
+</article>
+
+<article class="card">
+  <h3>유바이오로직스 (206650)</h3>
+  <div class="grid">
+    <section>
+      <h4>기본</h4>
+      <ul>
+        <li><strong>액션:</strong> BUY</li>
+        <li><strong>사유:</strong> 전략 신규 편입 (rank=8)</li>
+        <li><strong>보고서 SCORE:</strong> 3.7513 / rank 8</li>
+        <li><strong>조정 SCORE:</strong> 3.7513</li>
+        <li><strong>holding bonus:</strong> 0.0000</li>
+        <li><strong>재구성 SCORE:</strong> 3.7513</li>
+        <li><strong>SCORE 차이:</strong> 0.0000</li>
+        <li><strong>industry4:</strong> 212</li>
+        
+        <li><strong>cohort_status:</strong> -</li>
+        <li><strong>score_availability_reason:</strong> -</li>
+        <li><strong>latest_available_rebalance_month:</strong> -</li>
+        <li><strong>latest_available_year/quarter:</strong> - / -</li>
+        <li><strong>현재가:</strong> 13,990</li>
+        <li><strong>시가총액:</strong> 4,918억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>재무</h4>
+      <ul>
+        <li><strong>기준연도/분기:</strong> 2025 / 3</li>
+        <li><strong>매출(TTM):</strong> 1,537억원</li>
+        <li><strong>영업이익(TTM):</strong> 637억원</li>
+        <li><strong>순이익(TTM):</strong> 491억원</li>
+        <li><strong>직전 단분기 매출:</strong> 362억원</li>
+        <li><strong>당기 단분기 매출:</strong> 411억원</li>
+        <li><strong>단분기 매출 QoQ:</strong> 0.1347</li>
+        <li><strong>직전 단분기 영업이익:</strong> 112억원</li>
+        <li><strong>당기 단분기 영업이익:</strong> 189억원</li>
+        <li><strong>단분기 영업이익 QoQ:</strong> 0.6821</li>
+        <li><strong>영업현금흐름(CFO):</strong> 742억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>팩터</h4>
+      <ul>
+        <li><strong>OpIncome_acc2:</strong> 7.9579</li>
+        <li><strong>Revenue_acc2:</strong> 0.3473</li>
+        <li><strong>Debt_to_Equity_log:</strong> 0.2920</li>
+        <li><strong>Quality_CFO_to_Assets:</strong> 0.3191</li>
+        <li><strong>CFO_isnull:</strong> 0</li>
+      </ul>
+    </section>
+    <section>
+      <h4>스코어 기여도</h4>
+      <ul>
+        <li><strong>contrib_op:</strong> 3.0000</li>
+        <li><strong>contrib_rev:</strong> 0.5237</li>
+        <li><strong>contrib_debt:</strong> 0.2275</li>
+        <li><strong>contrib_cfo:</strong> -</li>
+        <li><strong>contrib_missing:</strong> -</li>
+      </ul>
+    </section>
+    <section>
+      <h4>멀티플</h4>
+      <ul><li><strong>PER:</strong> 10.02</li><li><strong>PBR:</strong> 2.83</li><li><strong>PSR:</strong> 3.20</li><li><strong>EV/EBIT:</strong> 8.65</li></ul>
+    </section>
+    <section>
+      <h4>실행 계획</h4>
+      <ul>
+        <li><strong>총 목표 주문수량:</strong> 713주</li>
+        <li><strong>총 목표 주문금액:</strong> 10백만원</li>
+        <li><strong>Day1:</strong> 285주 / 4백만원</li>
+        <li><strong>Day2:</strong> 214주 / 3백만원</li>
+        <li><strong>Day3:</strong> 214주 / 3백만원</li>
+        <li><strong>예상 슬리피지:</strong> 5.030 bps</li>
+      </ul>
+    </section>
+  </div>
+</article>
+
+<article class="card">
+  <h3>RFHIC (218410)</h3>
+  <div class="grid">
+    <section>
+      <h4>기본</h4>
+      <ul>
+        <li><strong>액션:</strong> BUY</li>
+        <li><strong>사유:</strong> 전략 신규 편입 (rank=9)</li>
+        <li><strong>보고서 SCORE:</strong> 3.7180 / rank 9</li>
+        <li><strong>조정 SCORE:</strong> 3.7180</li>
+        <li><strong>holding bonus:</strong> 0.0000</li>
+        <li><strong>재구성 SCORE:</strong> 3.7180</li>
+        <li><strong>SCORE 차이:</strong> 0.0000</li>
+        <li><strong>industry4:</strong> 264</li>
+        
+        <li><strong>cohort_status:</strong> -</li>
+        <li><strong>score_availability_reason:</strong> -</li>
+        <li><strong>latest_available_rebalance_month:</strong> -</li>
+        <li><strong>latest_available_year/quarter:</strong> - / -</li>
+        <li><strong>현재가:</strong> 30,400</li>
+        <li><strong>시가총액:</strong> 1.33조원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>재무</h4>
+      <ul>
+        <li><strong>기준연도/분기:</strong> 2025 / 3</li>
+        <li><strong>매출(TTM):</strong> 1,557억원</li>
+        <li><strong>영업이익(TTM):</strong> 219억원</li>
+        <li><strong>순이익(TTM):</strong> 144억원</li>
+        <li><strong>직전 단분기 매출:</strong> 446억원</li>
+        <li><strong>당기 단분기 매출:</strong> 405억원</li>
+        <li><strong>단분기 매출 QoQ:</strong> -0.0928</li>
+        <li><strong>직전 단분기 영업이익:</strong> 83억원</li>
+        <li><strong>당기 단분기 영업이익:</strong> 74억원</li>
+        <li><strong>단분기 영업이익 QoQ:</strong> -0.1135</li>
+        <li><strong>영업현금흐름(CFO):</strong> 438억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>팩터</h4>
+      <ul>
+        <li><strong>OpIncome_acc2:</strong> 3.9974</li>
+        <li><strong>Revenue_acc2:</strong> 0.3302</li>
+        <li><strong>Debt_to_Equity_log:</strong> 0.2988</li>
+        <li><strong>Quality_CFO_to_Assets:</strong> 0.0871</li>
+        <li><strong>CFO_isnull:</strong> 0</li>
+      </ul>
+    </section>
+    <section>
+      <h4>스코어 기여도</h4>
+      <ul>
+        <li><strong>contrib_op:</strong> 3.0000</li>
+        <li><strong>contrib_rev:</strong> 0.4955</li>
+        <li><strong>contrib_debt:</strong> 0.2224</li>
+        <li><strong>contrib_cfo:</strong> -</li>
+        <li><strong>contrib_missing:</strong> -</li>
+      </ul>
+    </section>
+    <section>
+      <h4>멀티플</h4>
+      <ul><li><strong>PER:</strong> 92.80</li><li><strong>PBR:</strong> 3.57</li><li><strong>PSR:</strong> 8.56</li><li><strong>EV/EBIT:</strong> 66.86</li></ul>
+    </section>
+    <section>
+      <h4>실행 계획</h4>
+      <ul>
+        <li><strong>총 목표 주문수량:</strong> 327주</li>
+        <li><strong>총 목표 주문금액:</strong> 10백만원</li>
+        <li><strong>Day1:</strong> 131주 / 4백만원</li>
+        <li><strong>Day2:</strong> 98주 / 3백만원</li>
+        <li><strong>Day3:</strong> 98주 / 3백만원</li>
+        <li><strong>예상 슬리피지:</strong> 5.007 bps</li>
+      </ul>
+    </section>
+  </div>
+</article>
+
+<article class="card">
+  <h3>에프에스티 (036810)</h3>
+  <div class="grid">
+    <section>
+      <h4>기본</h4>
+      <ul>
+        <li><strong>액션:</strong> BUY</li>
+        <li><strong>사유:</strong> 전략 신규 편입 (rank=10)</li>
+        <li><strong>보고서 SCORE:</strong> 3.6035 / rank 10</li>
+        <li><strong>조정 SCORE:</strong> 3.6035</li>
+        <li><strong>holding bonus:</strong> 0.0000</li>
+        <li><strong>재구성 SCORE:</strong> 3.6035</li>
+        <li><strong>SCORE 차이:</strong> -0.0000</li>
+        <li><strong>industry4:</strong> 2629</li>
+        
+        <li><strong>cohort_status:</strong> -</li>
+        <li><strong>score_availability_reason:</strong> -</li>
+        <li><strong>latest_available_rebalance_month:</strong> -</li>
+        <li><strong>latest_available_year/quarter:</strong> - / -</li>
+        <li><strong>현재가:</strong> 32,676</li>
+        <li><strong>시가총액:</strong> 9,312억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>재무</h4>
+      <ul>
+        <li><strong>기준연도/분기:</strong> 2025 / 3</li>
+        <li><strong>매출(TTM):</strong> 2,881억원</li>
+        <li><strong>영업이익(TTM):</strong> 69억원</li>
+        <li><strong>순이익(TTM):</strong> -19억원</li>
+        <li><strong>직전 단분기 매출:</strong> 760억원</li>
+        <li><strong>당기 단분기 매출:</strong> 655억원</li>
+        <li><strong>단분기 매출 QoQ:</strong> -0.1381</li>
+        <li><strong>직전 단분기 영업이익:</strong> 17억원</li>
+        <li><strong>당기 단분기 영업이익:</strong> -19억원</li>
+        <li><strong>단분기 영업이익 QoQ:</strong> -2.0823</li>
+        <li><strong>영업현금흐름(CFO):</strong> 256억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>팩터</h4>
+      <ul>
+        <li><strong>OpIncome_acc2:</strong> 22.8354</li>
+        <li><strong>Revenue_acc2:</strong> 0.5367</li>
+        <li><strong>Debt_to_Equity_log:</strong> 0.7891</li>
+        <li><strong>Quality_CFO_to_Assets:</strong> 0.0492</li>
+        <li><strong>CFO_isnull:</strong> 0</li>
+      </ul>
+    </section>
+    <section>
+      <h4>스코어 기여도</h4>
+      <ul>
+        <li><strong>contrib_op:</strong> 3.0000</li>
+        <li><strong>contrib_rev:</strong> 0.7500</li>
+        <li><strong>contrib_debt:</strong> -0.1465</li>
+        <li><strong>contrib_cfo:</strong> -</li>
+        <li><strong>contrib_missing:</strong> -</li>
+      </ul>
+    </section>
+    <section>
+      <h4>멀티플</h4>
+      <ul><li><strong>PBR:</strong> 3.94</li><li><strong>PSR:</strong> 3.23</li><li><strong>EV/EBIT:</strong> 175.47</li></ul>
+    </section>
+    <section>
+      <h4>실행 계획</h4>
+      <ul>
+        <li><strong>총 목표 주문수량:</strong> 304주</li>
+        <li><strong>총 목표 주문금액:</strong> 10백만원</li>
+        <li><strong>Day1:</strong> 122주 / 4백만원</li>
+        <li><strong>Day2:</strong> 91주 / 3백만원</li>
+        <li><strong>Day3:</strong> 91주 / 3백만원</li>
+        <li><strong>예상 슬리피지:</strong> 5.007 bps</li>
+      </ul>
+    </section>
+  </div>
+</article>
+
+</section>
+
+<section>
+  <h2>8. SELL 종목 상세</h2>
+  
+<article class="card">
+  <h3>삼성전자 (005930)</h3>
+  <div class="grid">
+    <section>
+      <h4>기본</h4>
+      <ul>
+        <li><strong>액션:</strong> SELL</li>
+        <li><strong>사유:</strong> 전략 탈락 (universe_rank=423)</li>
+        <li><strong>보고서 SCORE:</strong> -2.8461 / rank 423</li>
+        <li><strong>조정 SCORE:</strong> -2.6461</li>
+        <li><strong>holding bonus:</strong> 0.2000</li>
+        <li><strong>재구성 SCORE:</strong> -2.8461</li>
+        <li><strong>SCORE 차이:</strong> 0.0000</li>
+        <li><strong>industry4:</strong> 264</li>
+        
+        <li><strong>cohort_status:</strong> in_target_cohort</li>
+        <li><strong>score_availability_reason:</strong> scored_in_target_cohort</li>
+        <li><strong>latest_available_rebalance_month:</strong> -</li>
+        <li><strong>latest_available_year/quarter:</strong> - / -</li>
+        <li><strong>현재가:</strong> 97,200</li>
+        <li><strong>시가총액:</strong> 1,081.72조원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>재무</h4>
+      <ul>
+        <li><strong>기준연도/분기:</strong> 2025 / 3</li>
+        <li><strong>매출(TTM):</strong> 315.56조원</li>
+        <li><strong>영업이익(TTM):</strong> 30.02조원</li>
+        <li><strong>순이익(TTM):</strong> 33.32조원</li>
+        <li><strong>직전 단분기 매출:</strong> 74.57조원</li>
+        <li><strong>당기 단분기 매출:</strong> 86.06조원</li>
+        <li><strong>단분기 매출 QoQ:</strong> 0.1542</li>
+        <li><strong>직전 단분기 영업이익:</strong> 4.68조원</li>
+        <li><strong>당기 단분기 영업이익:</strong> 12.17조원</li>
+        <li><strong>단분기 영업이익 QoQ:</strong> 1.6018</li>
+        <li><strong>영업현금흐름(CFO):</strong> 78.54조원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>팩터</h4>
+      <ul>
+        <li><strong>OpIncome_acc2:</strong> -2.5773</li>
+        <li><strong>Revenue_acc2:</strong> -0.0419</li>
+        <li><strong>Debt_to_Equity_log:</strong> 0.2362</li>
+        <li><strong>Quality_CFO_to_Assets:</strong> 0.1500</li>
+        <li><strong>CFO_isnull:</strong> 0</li>
+      </ul>
+    </section>
+    <section>
+      <h4>스코어 기여도</h4>
+      <ul>
+        <li><strong>contrib_op:</strong> -3.0000</li>
+        <li><strong>contrib_rev:</strong> -0.1156</li>
+        <li><strong>contrib_debt:</strong> 0.2695</li>
+        <li><strong>contrib_cfo:</strong> -</li>
+        <li><strong>contrib_missing:</strong> -</li>
+      </ul>
+    </section>
+    <section>
+      <h4>멀티플</h4>
+      <ul><li><strong>PER:</strong> 32.47</li><li><strong>PBR:</strong> 2.62</li><li><strong>PSR:</strong> 3.43</li><li><strong>EV/EBIT:</strong> 39.70</li></ul>
+    </section>
+    <section>
+      <h4>실행 계획</h4>
+      <ul>
+        <li><strong>총 목표 주문수량:</strong> -주</li>
+        <li><strong>총 목표 주문금액:</strong> -</li>
+        <li><strong>Day1:</strong> -주 / -</li>
+        <li><strong>Day2:</strong> -주 / -</li>
+        <li><strong>Day3:</strong> -주 / -</li>
+        <li><strong>예상 슬리피지:</strong> - bps</li>
+      </ul>
+    </section>
+  </div>
+</article>
+
+<article class="card">
+  <h3>리노공업 (058470)</h3>
+  <div class="grid">
+    <section>
+      <h4>기본</h4>
+      <ul>
+        <li><strong>액션:</strong> SELL</li>
+        <li><strong>사유:</strong> 전략 탈락 (universe_rank=76)</li>
+        <li><strong>보고서 SCORE:</strong> 1.5888 / rank 76</li>
+        <li><strong>조정 SCORE:</strong> 1.7888</li>
+        <li><strong>holding bonus:</strong> 0.2000</li>
+        <li><strong>재구성 SCORE:</strong> 1.5888</li>
+        <li><strong>SCORE 차이:</strong> 0.0000</li>
+        <li><strong>industry4:</strong> 2629</li>
+        
+        <li><strong>cohort_status:</strong> in_target_cohort</li>
+        <li><strong>score_availability_reason:</strong> scored_in_target_cohort</li>
+        <li><strong>latest_available_rebalance_month:</strong> -</li>
+        <li><strong>latest_available_year/quarter:</strong> - / -</li>
+        <li><strong>현재가:</strong> 56,500</li>
+        <li><strong>시가총액:</strong> 1.49조원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>재무</h4>
+      <ul>
+        <li><strong>기준연도/분기:</strong> 2025 / 3</li>
+        <li><strong>매출(TTM):</strong> 3,712억원</li>
+        <li><strong>영업이익(TTM):</strong> 1,737억원</li>
+        <li><strong>순이익(TTM):</strong> 1,507억원</li>
+        <li><strong>직전 단분기 매출:</strong> 1,125억원</li>
+        <li><strong>당기 단분기 매출:</strong> 968억원</li>
+        <li><strong>단분기 매출 QoQ:</strong> -0.1394</li>
+        <li><strong>직전 단분기 영업이익:</strong> 534억원</li>
+        <li><strong>당기 단분기 영업이익:</strong> 483억원</li>
+        <li><strong>단분기 영업이익 QoQ:</strong> -0.0970</li>
+        <li><strong>영업현금흐름(CFO):</strong> 1,735억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>팩터</h4>
+      <ul>
+        <li><strong>OpIncome_acc2:</strong> 0.3040</li>
+        <li><strong>Revenue_acc2:</strong> 0.4549</li>
+        <li><strong>Debt_to_Equity_log:</strong> 0.1005</li>
+        <li><strong>Quality_CFO_to_Assets:</strong> 0.2275</li>
+        <li><strong>CFO_isnull:</strong> 0</li>
+      </ul>
+    </section>
+    <section>
+      <h4>스코어 기여도</h4>
+      <ul>
+        <li><strong>contrib_op:</strong> 0.5167</li>
+        <li><strong>contrib_rev:</strong> 0.7005</li>
+        <li><strong>contrib_debt:</strong> 0.3716</li>
+        <li><strong>contrib_cfo:</strong> -</li>
+        <li><strong>contrib_missing:</strong> -</li>
+      </ul>
+    </section>
+    <section>
+      <h4>멀티플</h4>
+      <ul><li><strong>PER:</strong> 9.86</li><li><strong>PBR:</strong> 2.16</li><li><strong>PSR:</strong> 4.00</li><li><strong>EV/EBIT:</strong> 8.98</li></ul>
+    </section>
+    <section>
+      <h4>실행 계획</h4>
+      <ul>
+        <li><strong>총 목표 주문수량:</strong> -주</li>
+        <li><strong>총 목표 주문금액:</strong> -</li>
+        <li><strong>Day1:</strong> -주 / -</li>
+        <li><strong>Day2:</strong> -주 / -</li>
+        <li><strong>Day3:</strong> -주 / -</li>
+        <li><strong>예상 슬리피지:</strong> - bps</li>
+      </ul>
+    </section>
+  </div>
+</article>
+
+<article class="card">
+  <h3>클래시스 (214150)</h3>
+  <div class="grid">
+    <section>
+      <h4>기본</h4>
+      <ul>
+        <li><strong>액션:</strong> SELL</li>
+        <li><strong>사유:</strong> 전략 탈락 (universe_rank=106)</li>
+        <li><strong>보고서 SCORE:</strong> 0.9576 / rank 106</li>
+        <li><strong>조정 SCORE:</strong> 1.1576</li>
+        <li><strong>holding bonus:</strong> 0.2000</li>
+        <li><strong>재구성 SCORE:</strong> 0.9576</li>
+        <li><strong>SCORE 차이:</strong> 0.0000</li>
+        <li><strong>industry4:</strong> 271</li>
+        
+        <li><strong>cohort_status:</strong> in_target_cohort</li>
+        <li><strong>score_availability_reason:</strong> scored_in_target_cohort</li>
+        <li><strong>latest_available_rebalance_month:</strong> -</li>
+        <li><strong>latest_available_year/quarter:</strong> - / -</li>
+        <li><strong>현재가:</strong> 56,100</li>
+        <li><strong>시가총액:</strong> 4.15조원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>재무</h4>
+      <ul>
+        <li><strong>기준연도/분기:</strong> 2025 / 3</li>
+        <li><strong>매출(TTM):</strong> 3,178억원</li>
+        <li><strong>영업이익(TTM):</strong> 1,552억원</li>
+        <li><strong>순이익(TTM):</strong> 1,177억원</li>
+        <li><strong>직전 단분기 매출:</strong> 833억원</li>
+        <li><strong>당기 단분기 매출:</strong> 830억원</li>
+        <li><strong>단분기 매출 QoQ:</strong> -0.0034</li>
+        <li><strong>직전 단분기 영업이익:</strong> 430억원</li>
+        <li><strong>당기 단분기 영업이익:</strong> 376억원</li>
+        <li><strong>단분기 영업이익 QoQ:</strong> -0.1254</li>
+        <li><strong>영업현금흐름(CFO):</strong> 1,121억원</li>
+      </ul>
+    </section>
+    <section>
+      <h4>팩터</h4>
+      <ul>
+        <li><strong>OpIncome_acc2:</strong> 0.1835</li>
+        <li><strong>Revenue_acc2:</strong> 0.2327</li>
+        <li><strong>Debt_to_Equity_log:</strong> 0.2331</li>
+        <li><strong>Quality_CFO_to_Assets:</strong> 0.1713</li>
+        <li><strong>CFO_isnull:</strong> 0</li>
+      </ul>
+    </section>
+    <section>
+      <h4>스코어 기여도</h4>
+      <ul>
+        <li><strong>contrib_op:</strong> 0.3502</li>
+        <li><strong>contrib_rev:</strong> 0.3355</li>
+        <li><strong>contrib_debt:</strong> 0.2719</li>
+        <li><strong>contrib_cfo:</strong> -</li>
+        <li><strong>contrib_missing:</strong> -</li>
+      </ul>
+    </section>
+    <section>
+      <h4>멀티플</h4>
+      <ul><li><strong>PER:</strong> 35.29</li><li><strong>PBR:</strong> 8.01</li><li><strong>PSR:</strong> 13.07</li><li><strong>EV/EBIT:</strong> 27.64</li></ul>
+    </section>
+    <section>
+      <h4>실행 계획</h4>
+      <ul>
+        <li><strong>총 목표 주문수량:</strong> -주</li>
+        <li><strong>총 목표 주문금액:</strong> -</li>
+        <li><strong>Day1:</strong> -주 / -</li>
+        <li><strong>Day2:</strong> -주 / -</li>
+        <li><strong>Day3:</strong> -주 / -</li>
+        <li><strong>예상 슬리피지:</strong> - bps</li>
+      </ul>
+    </section>
+  </div>
+</article>
+
+</section>
+
+<section>
+  <h2>9. REVIEW 종목 상세</h2>
+  <p>없음</p>
+</section>
+</body>
+</html>

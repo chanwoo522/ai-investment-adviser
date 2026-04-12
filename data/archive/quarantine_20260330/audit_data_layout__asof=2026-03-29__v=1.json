@@ -1,0 +1,284 @@
+{
+  "summary": {
+    "OK": 26,
+    "WARN": 28,
+    "FAIL": 1
+  },
+  "results": [
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "디렉터리 존재: data\\raw"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "디렉터리 존재: data\\interim"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "디렉터리 존재: data\\processed"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "디렉터리 존재: data\\features"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "디렉터리 존재: data\\live"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "디렉터리 존재: data\\backtest"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "디렉터리 존재: data\\archive"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "디렉터리 존재: data\\reference"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "디렉터리 존재: data\\portfolio"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "권장 디렉터리 존재: data\\live\\actions"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "권장 디렉터리 존재: data\\live\\candidates"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "권장 디렉터리 존재: data\\live\\execution"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "권장 디렉터리 존재: data\\live\\reports"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "권장 디렉터리 존재: data\\live\\scores"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "권장 디렉터리 존재: data\\portfolio\\current"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "권장 디렉터리 존재: data\\portfolio\\history"
+    },
+    {
+      "level": "OK",
+      "category": "dir",
+      "message": "권장 디렉터리 존재: data\\features\\features_live"
+    },
+    {
+      "level": "OK",
+      "category": "reference",
+      "message": "종목명-티커 참조 파일 확인: reference\\data_3133_20260329.xlsx"
+    },
+    {
+      "level": "WARN",
+      "category": "holdings",
+      "message": "data/portfolio/current 아래 holdings_clean csv가 없습니다."
+    },
+    {
+      "level": "WARN",
+      "category": "holdings",
+      "message": "data/portfolio/history 아래 원본 xlsx가 없습니다."
+    },
+    {
+      "level": "WARN",
+      "category": "holdings",
+      "message": "구경로 current_portfolio 아래 holdings 파일이 남아 있습니다. 새 구조(data/portfolio/*)와 혼용되지 않도록 주의하세요."
+    },
+    {
+      "level": "OK",
+      "category": "run_chain",
+      "message": "fundamentals 확인: data\\processed\\fundamentals_quarterly__asof=2026-03-29__src=dart__fs=CFS__y=2016-2025__v=1.parquet"
+    },
+    {
+      "level": "FAIL",
+      "category": "run_chain",
+      "message": "features_live 누락: data\\features\\features_live\\features_live__asof=2026-03-29__metric=revenue_op__v=3291.parquet 또는 data\\processed\\features_live__asof=2026-03-29__metric=revenue_op__v=3291.parquet"
+    },
+    {
+      "level": "OK",
+      "category": "run_chain",
+      "message": "scores_full 확인: data\\live\\scores\\latest_scores__asof=2026-03-29__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_liq__featv=3291__target=2026-03-31__full_universe.csv"
+    },
+    {
+      "level": "OK",
+      "category": "run_chain",
+      "message": "scores_topk 확인: data\\live\\scores\\latest_scores__asof=2026-03-29__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_liq__featv=3291__target=2026-03-31__topk.csv"
+    },
+    {
+      "level": "OK",
+      "category": "run_chain",
+      "message": "actions 확인: data\\live\\actions\\live_actions__asof=2026-03-29__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_liq__target=2026-03-31__v=3291.csv"
+    },
+    {
+      "level": "OK",
+      "category": "run_chain",
+      "message": "execution_live 확인: data\\processed\\execution_plan__total=100000000__v=3291.csv"
+    },
+    {
+      "level": "OK",
+      "category": "run_chain",
+      "message": "report_md 확인: data\\live\\reports\\rebalance_report__asof=2026-03-29__target=2026-03-31__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_liq__v=3291.md"
+    },
+    {
+      "level": "OK",
+      "category": "run_chain",
+      "message": "report_html 확인: data\\live\\reports\\rebalance_report__asof=2026-03-29__target=2026-03-31__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_liq__v=3291.html"
+    },
+    {
+      "level": "OK",
+      "category": "run_chain",
+      "message": "report_detail 확인: data\\live\\reports\\rebalance_report_detail__asof=2026-03-29__target=2026-03-31__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_liq__v=3291.csv"
+    },
+    {
+      "level": "WARN",
+      "category": "duplicate_risk",
+      "message": "processed features_live: 파일이 없습니다."
+    },
+    {
+      "level": "WARN",
+      "category": "duplicate_risk",
+      "message": "features/features_live: 2개 존재. 최신=data\\features\\features_live\\features_live__asof=2026-03-29__metric=revenue_op__v=3292.parquet. 자동탐색 대신 버전 명시 사용 권장."
+    },
+    {
+      "level": "WARN",
+      "category": "duplicate_risk",
+      "message": "processed latest_scores: 파일이 없습니다."
+    },
+    {
+      "level": "WARN",
+      "category": "duplicate_risk",
+      "message": "live scores: 6개 존재. 최신=data\\live\\scores\\latest_scores__asof=2026-03-29__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_liq__featv=3291__target=2026-03-31__current_holdings_scored.csv. 자동탐색 대신 버전 명시 사용 권장."
+    },
+    {
+      "level": "WARN",
+      "category": "duplicate_risk",
+      "message": "processed actions: 파일이 없습니다."
+    },
+    {
+      "level": "WARN",
+      "category": "duplicate_risk",
+      "message": "live actions: 2개 존재. 최신=data\\live\\actions\\live_actions__asof=2026-03-29__metric=revenue_op__strat=D_quality_filter_debt_profitaccel_liq__target=2026-03-31__v=3291.csv. 자동탐색 대신 버전 명시 사용 권장."
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\archive\\backtest_quarterly_rebalance_v2.py 에 잠재적 구경로/하드코딩 참조 패턴 발견: data[\\\\/]+processed[\\\\/]+features_live"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\archive\\generate_live_portfolio.py 에 잠재적 구경로/하드코딩 참조 패턴 발견: data[\\\\/]+processed[\\\\/]+live_actions"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\archive\\make_returns_monthly_fdr.py 에 잠재적 구경로/하드코딩 참조 패턴 발견: data[\\\\/]+processed[\\\\/]+features_live"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\backtest\\backtest_quarterly_rebalance_v2.py 에 잠재적 구경로/하드코딩 참조 패턴 발견: data[\\\\/]+processed[\\\\/]+features_live"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\data_intermediate\\build_corpcode_ticker_map.py 에 잠재적 구경로/하드코딩 참조 패턴 발견: data[\\\\/]+processed[\\\\/]+features_live"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\live\\score_latest_rebalance.py 에 잠재적 구경로/하드코딩 참조 패턴 발견: current_portfolio"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\live\\score_latest_rebalance.py 에 잠재적 구경로/하드코딩 참조 패턴 발견: data[\\\\/]+processed[\\\\/]+features_live"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\live\\score_latest_rebalance.py 에 잠재적 구경로/하드코딩 참조 패턴 발견: 20260314_holdings_clean_manual\\.csv"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\ops\\audit_data_layout.py 에 잠재적 구경로/하드코딩 참조 패턴 발견: current_portfolio"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\archive\\run_rebalance_2025-11-30.ps1 에 잠재적 구경로/하드코딩 참조 패턴 발견: current_portfolio"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\archive\\run_rebalance_2025-11-30.ps1 에 잠재적 구경로/하드코딩 참조 패턴 발견: data[\\\\/]+processed[\\\\/]+features_live"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\archive\\run_rebalance_2025-11-30.ps1 에 잠재적 구경로/하드코딩 참조 패턴 발견: data[\\\\/]+processed[\\\\/]+live_actions"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\archive\\run_rebalance_2025-11-30.ps1 에 잠재적 구경로/하드코딩 참조 패턴 발견: data[\\\\/]+processed[\\\\/]+rebalance_report"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\archive\\run_rebalance_2025-11-30.ps1 에 잠재적 구경로/하드코딩 참조 패턴 발견: 20260314_holdings_clean_manual\\.csv"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\backtest\\run_rebalance_2025-11-30.ps1 에 잠재적 구경로/하드코딩 참조 패턴 발견: current_portfolio"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\backtest\\run_rebalance_2025-11-30.ps1 에 잠재적 구경로/하드코딩 참조 패턴 발견: data[\\\\/]+processed[\\\\/]+features_live"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\backtest\\run_rebalance_2025-11-30.ps1 에 잠재적 구경로/하드코딩 참조 패턴 발견: data[\\\\/]+processed[\\\\/]+live_actions"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\backtest\\run_rebalance_2025-11-30.ps1 에 잠재적 구경로/하드코딩 참조 패턴 발견: data[\\\\/]+processed[\\\\/]+rebalance_report"
+    },
+    {
+      "level": "WARN",
+      "category": "script_ref",
+      "message": "scripts\\backtest\\run_rebalance_2025-11-30.ps1 에 잠재적 구경로/하드코딩 참조 패턴 발견: 20260314_holdings_clean_manual\\.csv"
+    }
+  ]
+}

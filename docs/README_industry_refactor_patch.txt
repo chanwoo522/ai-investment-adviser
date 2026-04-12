@@ -1,0 +1,1 @@
+Industry reference refactor patch

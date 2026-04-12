@@ -1,0 +1,7 @@
+﻿category,file_path,role,entry_point,reads,writes,depends_on,used_in_live,used_in_rebuild,status
+live,scripts/live/run_live_rebalance.ps1,main runner,YES,holdings|features_live,actions|reports,execution.yaml,YES,NO,PROTECT
+live,scripts/live/score_latest_rebalance.py,scoring,NO,features_live,latest_scores,backtest_engine,YES,NO,PROTECT
+engine,scripts/backtest/backtest_quarterly_rebalance_v2.py,core engine,NO,features|returns,reports,,YES,YES,PROTECT
+archive,scripts/archive/collect_prices.py,fallback,NO,asof,prices,,NO,YES,ACTIVE_FALLBACK
+archive,scripts/archive/make_returns_monthly.py,fallback,NO,prices,returns,,NO,YES,ACTIVE_FALLBACK
+archive,scripts/archive/build_features_phase1.py,fallback,NO,fundamentals,phase1,,NO,YES,ACTIVE_FALLBACK
