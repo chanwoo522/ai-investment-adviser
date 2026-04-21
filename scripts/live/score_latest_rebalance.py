@@ -19,10 +19,20 @@ if BASE_DIR not in sys.path:
 
 import argparse
 import json
+import re
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
+import joblib
+import numpy as np
 import pandas as pd
+
+from common.portfolio_modules import (
+    load_strategy_modules_config,
+    apply_expectation_overlay,
+    apply_quality_soft_penalty,
+    select_target_portfolio_with_mcap_groups,
+)
 
 # backtest와 동일 로직 재사용
 try:
@@ -62,6 +72,24 @@ except ModuleNotFoundError:
         lookup_prices_on_or_before,
     )
 
+
+# --------------------------------------------------------------------------------------
+# AI overlay constants
+# --------------------------------------------------------------------------------------
+
+DEFAULT_BUCKET_SPECS: dict[str, list[str]] = {
+    "profit_accel": ["OpIncome_acc2_log1p", "op_growth_streak2"],
+    "revenue_support": ["Revenue_acc2", "rev_growth_streak2"],
+    "quality": ["Quality_CFO_to_Assets"],
+    "balance_sheet": ["Debt_to_Equity_log"],
+}
+
+RAW_FACTOR_DEFAULTS = {"op_growth_streak2", "rev_growth_streak2"}
+
+
+# --------------------------------------------------------------------------------------
+# Existing helpers
+# --------------------------------------------------------------------------------------
 
 def resolve_holdings_csv_arg(holdings_csv: str, current_csv: str) -> Path:
     """
@@ -375,6 +403,445 @@ def classify_missing_reason(row: pd.Series, target_dt: pd.Timestamp, weighted_co
     return "in_target_cohort_but_unscored"
 
 
+# --------------------------------------------------------------------------------------
+# AI overlay helpers
+# --------------------------------------------------------------------------------------
+
+def _to_num(s: pd.Series) -> pd.Series:
+    return pd.to_numeric(s, errors="coerce")
+
+
+def _safe_mean(series: pd.Series) -> float:
+    x = _to_num(series)
+    return float(x.mean()) if x.notna().sum() > 0 else np.nan
+
+
+def _safe_std(series: pd.Series) -> float:
+    x = _to_num(series)
+    return float(x.std()) if x.notna().sum() > 1 else np.nan
+
+
+def _extract_asof_from_name(name: str) -> str | None:
+    m = re.search(r"__asof=(\d{4}-\d{2}-\d{2})__", name)
+    return m.group(1) if m else None
+
+
+def _pick_raw_prices_path(asof: str, raw_px_v: int) -> Optional[Path]:
+    exact = Path(rf"data/processed/prices_raw__src=pykrx__start=20110101__asof={asof}__freq=d__v={raw_px_v}.parquet")
+    if exact.exists():
+        return exact
+
+    cands = sorted(Path("data/processed").glob(f"prices_raw__src=pykrx__start=*__asof=*__freq=d__v={raw_px_v}.parquet"))
+    eligible: list[tuple[str, Path]] = []
+    for p in cands:
+        a = _extract_asof_from_name(p.name)
+        if a and a <= asof:
+            eligible.append((a, p))
+    if not eligible:
+        return None
+    eligible.sort(key=lambda x: x[0])
+    return eligible[-1][1]
+
+
+def _detect_price_columns(df: pd.DataFrame) -> tuple[str, str, str]:
+    tcol = next((c for c in ["ticker", "code", "종목코드", "symbol"] if c in df.columns), None)
+    dcol = next((c for c in ["date", "Date", "dt", "ymd", "trd_date"] if c in df.columns), None)
+    pcol = next((c for c in ["close", "Close", "adj_close", "price", "종가"] if c in df.columns), None)
+    if not tcol or not dcol or not pcol:
+        raise ValueError(f"Could not detect raw price columns from: {list(df.columns)}")
+    return tcol, dcol, pcol
+
+
+def _detect_traded_value_columns(df: pd.DataFrame) -> Optional[str]:
+    return next((c for c in ["traded_value", "거래대금", "trading_value", "value"] if c in df.columns), None)
+
+
+def _load_raw_prices(path: Path) -> pd.DataFrame:
+    px = pd.read_parquet(path).copy()
+    tcol, dcol, pcol = _detect_price_columns(px)
+    tvcol = _detect_traded_value_columns(px)
+
+    keep = [tcol, dcol, pcol]
+    if tvcol:
+        keep.append(tvcol)
+
+    px = px[keep].copy()
+    rename_map = {tcol: "ticker", dcol: "date", pcol: "price"}
+    if tvcol:
+        rename_map[tvcol] = "traded_value"
+    px = px.rename(columns=rename_map)
+
+    px["ticker"] = normalize_ticker_series(px["ticker"])
+    px["date"] = pd.to_datetime(px["date"], errors="coerce")
+    px["price"] = _to_num(px["price"])
+    if "traded_value" in px.columns:
+        px["traded_value"] = _to_num(px["traded_value"])
+    else:
+        px["traded_value"] = np.nan
+
+    px = px.dropna(subset=["ticker", "date", "price"]).copy()
+    px = px.sort_values(["ticker", "date"]).reset_index(drop=True)
+
+    px["ret_1d"] = px.groupby("ticker")["price"].pct_change()
+
+    for win in [20, 60]:
+        px[f"ret_{win}d"] = px.groupby("ticker")["price"].transform(lambda s: s / s.shift(win) - 1.0)
+        px[f"vol_{win}d"] = px.groupby("ticker")["ret_1d"].transform(
+            lambda s: s.rolling(win, min_periods=max(10, win // 2)).std()
+        )
+        px[f"tv_mean_{win}d"] = px.groupby("ticker")["traded_value"].transform(
+            lambda s: s.rolling(win, min_periods=max(10, win // 2)).mean()
+        )
+
+    def trailing_mdd(price: pd.Series, win: int) -> pd.Series:
+        roll_max = price.rolling(win, min_periods=max(10, win // 2)).max()
+        dd = price / roll_max - 1.0
+        return dd.rolling(win, min_periods=max(10, win // 2)).min()
+
+    for win in [60, 120]:
+        px[f"mdd_{win}d"] = px.groupby("ticker")["price"].transform(lambda s: trailing_mdd(s, win))
+
+    return px
+
+
+def _daily_snapshot_asof(px: pd.DataFrame, tickers: list[str], asof_date: pd.Timestamp) -> pd.DataFrame:
+    if len(tickers) == 0:
+        return pd.DataFrame(columns=["ticker"])
+
+    right = px.loc[px["ticker"].isin(tickers)].copy()
+    right = right.sort_values(["ticker", "date"]).reset_index(drop=True)
+
+    chunks: list[pd.DataFrame] = []
+    for tk in sorted(set(tickers)):
+        p = right.loc[right["ticker"] == tk].copy()
+        if len(p) == 0:
+            chunks.append(pd.DataFrame({"ticker": [tk]}))
+            continue
+
+        left = pd.DataFrame({"asof_date": [pd.Timestamp(asof_date)]})
+        merged = pd.merge_asof(
+            left.sort_values("asof_date"),
+            p.sort_values("date"),
+            left_on="asof_date",
+            right_on="date",
+            direction="backward",
+            allow_exact_matches=True,
+        )
+        merged["ticker"] = tk
+        chunks.append(merged)
+
+    return pd.concat(chunks, ignore_index=True)
+
+
+def _build_active_bucket_specs(
+    weights: dict[str, float],
+    df_cols: list[str],
+    bucket_specs: dict[str, list[str]],
+) -> dict[str, dict[str, float]]:
+    out: dict[str, dict[str, float]] = {}
+    for bucket, cols in bucket_specs.items():
+        active: dict[str, float] = {}
+        for c in cols:
+            if c in weights and float(weights[c]) != 0.0 and c in df_cols:
+                active[c] = float(weights[c])
+        if active:
+            out[bucket] = active
+    return out
+
+
+def _compute_bucket_scores(scored: pd.DataFrame, active_buckets: dict[str, dict[str, float]]) -> pd.DataFrame:
+    out = scored.copy()
+
+    for bucket, factor_map in active_buckets.items():
+        num = pd.Series(0.0, index=out.index, dtype="float64")
+        den = 0.0
+
+        for c, ww in factor_map.items():
+            base_abs = abs(float(ww))
+            if base_abs == 0.0:
+                continue
+
+            sig = _to_num(out.get(f"{c}__signal", pd.Series(index=out.index, dtype="float64"))).fillna(0.0)
+            mult = _to_num(out.get(f"{c}__mult", pd.Series(1.0, index=out.index, dtype="float64"))).fillna(1.0)
+            desirability = np.sign(float(ww)) * sig * mult
+
+            num += base_abs * desirability
+            den += base_abs
+
+        if den > 0:
+            out[f"{bucket}__score"] = (num / den).astype("float64")
+        else:
+            out[f"{bucket}__score"] = np.nan
+
+    return out
+
+
+def _bucket_base_abs_weight_map(active_buckets: dict[str, dict[str, float]]) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for bucket, fmap in active_buckets.items():
+        s = 0.0
+        for _, w in fmap.items():
+            try:
+                s += abs(float(w))
+            except Exception:
+                pass
+        out[bucket] = float(s)
+    return out
+
+
+def _pred_to_bucket_shares(pred_alpha_row: dict[str, float], base_abs_map: dict[str, float], temperature: float = 1.0) -> dict[str, float]:
+    buckets = list(base_abs_map.keys())
+    if not buckets:
+        return {}
+
+    base = np.array([max(base_abs_map.get(b, 0.0), 1e-8) for b in buckets], dtype=float)
+    pred = np.array([float(pred_alpha_row.get(b, np.nan)) for b in buckets], dtype=float)
+
+    if np.isnan(pred).all():
+        shares = base / base.sum()
+        return {b: float(w) for b, w in zip(buckets, shares)}
+
+    mu = np.nanmean(pred)
+    sd = np.nanstd(pred)
+    if not np.isfinite(sd) or sd == 0:
+        z = np.zeros(len(pred), dtype=float)
+    else:
+        z = (pred - mu) / sd
+        z = np.where(np.isfinite(z), z, 0.0)
+
+    z = np.clip(z, -2.0, 2.0)
+    tilt = np.exp(z / max(float(temperature), 1e-8))
+    raw = base * tilt
+    shares = raw / raw.sum()
+    return {b: float(w) for b, w in zip(buckets, shares)}
+
+
+def _apply_profit_accel_cap(
+    dyn_share: dict[str, float],
+    base_share: dict[str, float],
+    cap_delta: float | None,
+    target_bucket: str = "profit_accel",
+) -> dict[str, float]:
+    out = dict(dyn_share)
+
+    if cap_delta is None:
+        return out
+    if target_bucket not in out or target_bucket not in base_share:
+        return out
+
+    cap_delta = float(cap_delta)
+    if cap_delta < 0:
+        return out
+
+    wb = float(base_share[target_bucket])
+    wd = float(out[target_bucket])
+
+    lower = max(0.0, wb - cap_delta)
+    upper = min(1.0, wb + cap_delta)
+    wd_new = min(max(wd, lower), upper)
+
+    if abs(wd_new - wd) < 1e-12:
+        return out
+
+    others = [k for k in out.keys() if k != target_bucket]
+    other_old_sum = sum(float(out[k]) for k in others)
+
+    out[target_bucket] = wd_new
+    remain = max(0.0, 1.0 - wd_new)
+
+    if other_old_sum <= 0:
+        base_other_sum = sum(float(base_share.get(k, 0.0)) for k in others)
+        if base_other_sum <= 0:
+            for k in others:
+                out[k] = remain / max(len(others), 1)
+        else:
+            for k in others:
+                out[k] = remain * float(base_share.get(k, 0.0)) / base_other_sum
+    else:
+        for k in others:
+            out[k] = remain * float(out[k]) / other_old_sum
+
+    s = sum(out.values())
+    if s > 0:
+        for k in list(out.keys()):
+            out[k] = float(out[k] / s)
+    return out
+
+
+def _build_factor_to_bucket(active_buckets: dict[str, dict[str, float]]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for bucket, fmap in active_buckets.items():
+        for c in fmap.keys():
+            out[c] = bucket
+    return out
+
+
+def _latest_history_row_before_target(dataset_path: Path, target_dt: pd.Timestamp) -> pd.Series:
+    if not dataset_path.exists():
+        return pd.Series(dtype="object")
+
+    hist = pd.read_parquet(dataset_path).copy()
+    if "rebalance_month" not in hist.columns:
+        return pd.Series(dtype="object")
+
+    hist["rebalance_month"] = pd.to_datetime(hist["rebalance_month"], errors="coerce")
+    hist = hist.dropna(subset=["rebalance_month"]).sort_values("rebalance_month")
+    hist = hist.loc[hist["rebalance_month"] < pd.Timestamp(target_dt)].copy()
+    if len(hist) == 0:
+        return pd.Series(dtype="object")
+    return hist.iloc[-1].copy()
+
+
+def _build_live_ai_feature_row(
+    scored_filtered: pd.DataFrame,
+    raw_px: pd.DataFrame,
+    target_dt: pd.Timestamp,
+    history_row: pd.Series,
+    active_buckets: dict[str, dict[str, float]],
+) -> dict[str, Any]:
+    row: dict[str, Any] = {}
+
+    # bucket context
+    for bucket in active_buckets.keys():
+        bucket_col = f"{bucket}__score"
+        x = _to_num(scored_filtered.get(bucket_col, pd.Series(dtype="float64")))
+        row[f"context__{bucket}__mean"] = _safe_mean(x)
+        if x.notna().sum() > 0:
+            q_hi = x.quantile(0.9)
+            q_lo = x.quantile(0.1)
+            row[f"context__{bucket}__spread_p90_p10"] = float(q_hi - q_lo) if pd.notna(q_hi) and pd.notna(q_lo) else np.nan
+        else:
+            row[f"context__{bucket}__spread_p90_p10"] = np.nan
+
+    # lag1 from historical regime dataset
+    for bucket in active_buckets.keys():
+        row[f"lag1__{bucket}__alpha"] = history_row.get(f"target__{bucket}__alpha_next", np.nan) if len(history_row) else np.nan
+    row["lag1__baseline_ret"] = history_row.get("baseline_ret_next", np.nan) if len(history_row) else np.nan
+
+    # dailyagg universe / bucket
+    tickers = scored_filtered["ticker"].astype(str).tolist()
+    snap = _daily_snapshot_asof(raw_px, tickers=tickers, asof_date=target_dt)
+    if len(snap) > 0:
+        snap = snap.merge(
+            scored_filtered[["ticker"] + [f"{b}__score" for b in active_buckets.keys() if f"{b}__score" in scored_filtered.columns]],
+            on="ticker",
+            how="left",
+        )
+        row["dailyagg__universe__ret_20d_mean"] = _safe_mean(snap["ret_20d"])
+        row["dailyagg__universe__vol_20d_mean"] = _safe_mean(snap["vol_20d"])
+        row["dailyagg__universe__tv_mean_20d_mean"] = _safe_mean(snap["tv_mean_20d"])
+
+        for bucket in active_buckets.keys():
+            score_col = f"{bucket}__score"
+            part = snap.dropna(subset=[score_col]).copy() if score_col in snap.columns else pd.DataFrame()
+            if len(part) == 0:
+                row[f"dailyagg__{bucket}__ret_20d_mean"] = np.nan
+            else:
+                part = part.sort_values([score_col, "ticker"], ascending=[False, True]).head(20)
+                row[f"dailyagg__{bucket}__ret_20d_mean"] = _safe_mean(part["ret_20d"])
+    else:
+        row["dailyagg__universe__ret_20d_mean"] = np.nan
+        row["dailyagg__universe__vol_20d_mean"] = np.nan
+        row["dailyagg__universe__tv_mean_20d_mean"] = np.nan
+        for bucket in active_buckets.keys():
+            row[f"dailyagg__{bucket}__ret_20d_mean"] = np.nan
+
+    return row
+
+
+def _load_ai_overlay_bundle(ai_model_path: str) -> dict[str, Any]:
+    p = Path(ai_model_path)
+    if not p.exists():
+        raise FileNotFoundError(f"ai model path not found: {p}")
+
+    obj = joblib.load(p)
+    if not isinstance(obj, dict):
+        raise ValueError("ai model file is not a dict-like joblib pack")
+
+    required = ["feature_cols", "bucket_names", "models", "base_abs_bucket_weight_map"]
+    missing = [k for k in required if k not in obj]
+    if missing:
+        raise ValueError(f"ai model pack missing required keys: {missing}")
+    return obj
+
+
+def _infer_live_ai_overlay(
+    scored_filtered: pd.DataFrame,
+    target_dt: pd.Timestamp,
+    active_buckets: dict[str, dict[str, float]],
+    ai_bundle: dict[str, Any],
+    raw_px: pd.DataFrame,
+    ai_temperature: float,
+    ai_cap_profit_accel_delta: float | None,
+    ai_overlay_strength: float,
+) -> dict[str, Any]:
+    dataset_path = Path(str(ai_bundle.get("dataset_path", ""))) if ai_bundle.get("dataset_path") else None
+    history_row = _latest_history_row_before_target(dataset_path, target_dt) if dataset_path else pd.Series(dtype="object")
+
+    live_feat = _build_live_ai_feature_row(
+        scored_filtered=scored_filtered,
+        raw_px=raw_px,
+        target_dt=target_dt,
+        history_row=history_row,
+        active_buckets=active_buckets,
+    )
+
+    feature_cols: list[str] = list(ai_bundle.get("feature_cols", []))
+    X = pd.DataFrame([{c: live_feat.get(c, np.nan) for c in feature_cols}], columns=feature_cols)
+
+    pred_alpha: dict[str, float] = {}
+    models = ai_bundle.get("models", {})
+    for bucket in ai_bundle.get("bucket_names", []):
+        info = models.get(bucket, {})
+        mdl = info.get("model")
+        fallback_mean = float(info.get("fallback_mean", 0.0))
+        if mdl is None:
+            pred = fallback_mean
+        else:
+            pred = float(mdl.predict(X)[0])
+        pred_alpha[bucket] = pred
+
+    base_abs_map: dict[str, float] = dict(ai_bundle.get("base_abs_bucket_weight_map", {}))
+    base_share = _pred_to_bucket_shares(
+        pred_alpha_row={b: np.nan for b in base_abs_map.keys()},
+        base_abs_map=base_abs_map,
+        temperature=1.0,
+    )
+    dyn_share = _pred_to_bucket_shares(
+        pred_alpha_row=pred_alpha,
+        base_abs_map=base_abs_map,
+        temperature=float(ai_temperature),
+    )
+    dyn_share = _apply_profit_accel_cap(
+        dyn_share=dyn_share,
+        base_share=base_share,
+        cap_delta=ai_cap_profit_accel_delta,
+        target_bucket="profit_accel",
+    )
+
+    bucket_multipliers: dict[str, float] = {}
+    for bucket in base_share.keys():
+        wb = float(base_share.get(bucket, 0.0))
+        wd = float(dyn_share.get(bucket, 0.0))
+        ratio = 1.0 if wb <= 0 else (wd / wb)
+        # blend toward 1.0 for safety
+        blended = 1.0 + float(ai_overlay_strength) * (ratio - 1.0)
+        bucket_multipliers[bucket] = float(blended)
+
+    return {
+        "feature_row": live_feat,
+        "pred_alpha": pred_alpha,
+        "base_share": base_share,
+        "dyn_share": dyn_share,
+        "bucket_multipliers": bucket_multipliers,
+        "history_rebalance_month": history_row.get("rebalance_month", pd.NaT) if len(history_row) else pd.NaT,
+    }
+
+
+# --------------------------------------------------------------------------------------
+# Existing prep
+# --------------------------------------------------------------------------------------
+
 def prepare_features(asof: str, metric: str, feat_v: int) -> tuple[pd.DataFrame, pd.DataFrame, Path]:
     feature_candidates = [
         Path(rf"data/features/features_live/features_live__asof={asof}__metric={metric}__v={feat_v}.parquet"),
@@ -451,17 +918,21 @@ def make_scores_full_universe(
     use_robust_z: bool = False,
     raw_factors: list[str] | None = None,
     clip_tiers: list[dict] | None = None,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
+    ai_bundle: dict[str, Any] | None = None,
+    ai_raw_px: pd.DataFrame | None = None,
+    ai_temperature: float = 1.0,
+    ai_cap_profit_accel_delta: float | None = None,
+    ai_overlay_strength: float = 1.0,
+    price_history: pd.DataFrame | None = None,
+    expectation_cfg: dict[str, Any] | None = None,
+    quality_penalty_cfg: dict[str, Any] | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any] | None]:
     full = g.copy()
     full["passed_filters"] = False
     full["filter_status"] = "excluded_by_filter"
 
     filtered = apply_filters(g.copy(), filters, verbose=True)
 
-    # Hard gate: current-quarter operating income QoQ must be strictly positive.
-    # This is intentionally stricter than the generic min_ filter helper because
-    # apply_filters() allows NaN values to pass through. Here we require op_qoq > 0
-    # with non-null data to preserve the strategy intent: profit increase + acceleration.
     if "op_qoq" in filtered.columns:
         op_qoq_num = pd.to_numeric(filtered["op_qoq"], errors="coerce")
         strict_qoq = filtered.loc[op_qoq_num.notna() & (op_qoq_num > 0)].copy()
@@ -485,6 +956,7 @@ def make_scores_full_universe(
         full.loc[full["ticker"].isin(passed_set), "filter_status"] = "passed"
 
     gg = scored_base.copy()
+    gg["score_total_base"] = 0.0
     gg["score_total"] = 0.0
     used_cols = []
     raw_factors = set(raw_factors or [])
@@ -496,6 +968,7 @@ def make_scores_full_universe(
             return (1.0 - 0.7 * isnull - 0.4 * warn).clip(0.0, 1.0).astype("float64")
         return pd.Series(1.0, index=gg.index, dtype="float64")
 
+    # base contributions
     for c, ww in weights.items():
         ww = float(ww)
         if ww == 0.0 or c not in gg.columns:
@@ -507,41 +980,153 @@ def make_scores_full_universe(
             z = raw.fillna(0.0).astype("float64")
             rk = z.rank(ascending=False, method="min")
             mult = pd.Series(1.0, index=gg.index, dtype="float64")
-            contrib = ww * z
+            contrib_base = ww * z
         else:
             z_base = standardize_factor(safe_fill_for_z(raw), use_robust_z=use_robust_z, clip_z=None)
-            z = apply_piecewise_clip(z_base, clip_z=None if clip_z is None or clip_z < 0 else clip_z, clip_tiers=clip_tiers)
+            z = apply_piecewise_clip(
+                z_base,
+                clip_z=None if clip_z is None or clip_z < 0 else clip_z,
+                clip_tiers=clip_tiers,
+            )
             rk = z.rank(ascending=False, method="min")
             mult = _mask_mult_for(c)
-            contrib = ww * z * mult
+            contrib_base = ww * z * mult
 
         gg[f"{c}__raw"] = raw
+        gg[f"{c}__signal"] = z
         gg[f"{c}__z"] = z
         gg[f"{c}__rank"] = rk
         gg[f"{c}__mult"] = mult
-        gg[f"{c}__contrib"] = contrib
-        gg["score_total"] += contrib
+        gg[f"{c}__contrib_base"] = contrib_base
+        gg["score_total_base"] += contrib_base
 
+    ai_overlay_info: dict[str, Any] | None = None
+
+    # optional AI overlay
+    if ai_bundle is not None:
+        active_buckets = _build_active_bucket_specs(weights=weights, df_cols=list(gg.columns), bucket_specs=DEFAULT_BUCKET_SPECS)
+        gg = _compute_bucket_scores(gg, active_buckets=active_buckets)
+
+        if ai_raw_px is None:
+            raise ValueError("ai_bundle is provided but ai_raw_px is None")
+
+        ai_overlay_info = _infer_live_ai_overlay(
+            scored_filtered=gg,
+            target_dt=target_dt,
+            active_buckets=active_buckets,
+            ai_bundle=ai_bundle,
+            raw_px=ai_raw_px,
+            ai_temperature=float(ai_temperature),
+            ai_cap_profit_accel_delta=ai_cap_profit_accel_delta,
+            ai_overlay_strength=float(ai_overlay_strength),
+        )
+
+        factor_to_bucket = _build_factor_to_bucket(active_buckets)
+        gg["score_total"] = 0.0
+
+        for c in used_cols:
+            bucket = factor_to_bucket.get(c, None)
+            ai_mult = float(ai_overlay_info["bucket_multipliers"].get(bucket, 1.0)) if bucket else 1.0
+            gg[f"{c}__bucket"] = bucket if bucket is not None else pd.NA
+            gg[f"{c}__ai_mult"] = ai_mult
+            gg[f"{c}__contrib"] = gg[f"{c}__contrib_base"] * ai_mult
+            gg["score_total"] += gg[f"{c}__contrib"]
+
+        # stamp overlay summary columns so downstream csv keeps the info
+        for bucket, val in ai_overlay_info["pred_alpha"].items():
+            gg[f"ai_pred_alpha__{bucket}"] = float(val)
+        for bucket, val in ai_overlay_info["base_share"].items():
+            gg[f"ai_base_share__{bucket}"] = float(val)
+        for bucket, val in ai_overlay_info["dyn_share"].items():
+            gg[f"ai_dyn_share__{bucket}"] = float(val)
+        for bucket, val in ai_overlay_info["bucket_multipliers"].items():
+            gg[f"ai_bucket_mult__{bucket}"] = float(val)
+        for k, v in ai_overlay_info["feature_row"].items():
+            gg[f"ai_feat__{k}"] = v
+
+        gg["ai_overlay_active"] = 1
+    else:
+        gg["score_total"] = gg["score_total_base"]
+        for c in used_cols:
+            gg[f"{c}__contrib"] = gg[f"{c}__contrib_base"]
+            gg[f"{c}__ai_mult"] = 1.0
+        gg["ai_overlay_active"] = 0
+
+    gg = apply_expectation_overlay(
+        gg,
+        expectation_cfg,
+        asof_date=target_dt,
+        price_history=price_history,
+    )
+    gg = apply_quality_soft_penalty(
+        gg,
+        quality_penalty_cfg,
+    )
+
+    gg["score_base"] = gg["score_total_base"]
     gg["score"] = gg["score_total"]
     current_tickers = current_tickers or set()
     gg["hold_bonus_applied"] = gg["ticker"].astype(str).isin(current_tickers).astype(float) * float(hold_bonus)
     gg["score_adj"] = gg["score"] + gg["hold_bonus_applied"]
-    gg["score_rank"] = gg["score_total"].rank(ascending=False, method="min")
+    gg["score_rank"] = gg["score"].rank(ascending=False, method="min")
     gg["score_adj_rank"] = gg["score_adj"].rank(ascending=False, method="min")
     gg["rebalance_month"] = target_dt
 
-    keep = ["ticker", "rebalance_month", "score_total", "score", "hold_bonus_applied", "score_adj", "score_rank", "score_adj_rank"]
+    keep = [
+        "ticker",
+        "rebalance_month",
+        "score_total_base",
+        "score_total",
+        "score_base",
+        "score",
+        "hold_bonus_applied",
+        "score_adj",
+        "score_rank",
+        "score_adj_rank",
+        "ai_overlay_active",
+    ]
     for c in used_cols:
-        for suf in ("__raw", "__z", "__rank", "__mult", "__contrib"):
+        for suf in ("__raw", "__z", "__rank", "__mult", "__contrib_base", "__contrib", "__ai_mult", "__bucket"):
             col = f"{c}{suf}"
             if col in gg.columns:
                 keep.append(col)
 
-    for c in ["name", "corp_code", "year", "quarter", "CFO_isnull", "CFO_warn", group_col]:
+    for c in list(gg.columns):
+        if c.startswith("ai_pred_alpha__") or c.startswith("ai_base_share__") or c.startswith("ai_dyn_share__") or c.startswith("ai_bucket_mult__") or c.startswith("ai_feat__"):
+            keep.append(c)
+
+    for c in [
+        "expectation_overlay_active",
+        "expectation_component_count",
+        "expectation_valuation_z",
+        "expectation_mom6_z",
+        "expectation_mom12_z",
+        "expectation_score",
+        "expectation_penalty",
+        "score_total_pre_expect",
+        "score_total_post_expect",
+        "quality_soft_penalty_active",
+        "quality_penalty_netincome_ttm_nonpositive",
+        "quality_penalty_netincome_acc2_negative",
+        "quality_penalty_cfo_warn",
+        "quality_penalty_cfo_isnull",
+        "quality_penalty_total",
+        "score_total_pre_quality",
+        "score_total_post_quality",
+        "mcap",
+        "mcap_rank_pct",
+        "mcap_group",
+        "mcap_grouping_active",
+        "mcap_group_selection_reason",
+    ]:
+        if c in gg.columns:
+            keep.append(c)
+
+    for c in ["name", "corp_code", "year", "quarter", "CFO_isnull", "CFO_warn", "NetIncome_ttm", "NetIncome_acc2", group_col]:
         if c and c in gg.columns and c not in keep:
             keep.insert(1, c)
 
-    scored = gg[keep].copy()
+    scored = gg[list(dict.fromkeys(keep))].copy()
     scored = attach_names(scored, name_map)
 
     full = attach_names(full, name_map)
@@ -553,7 +1138,7 @@ def make_scores_full_universe(
         suffixes=("", "_scored"),
     )
 
-    return full, scored
+    return full, scored, ai_overlay_info
 
 
 def main():
@@ -572,6 +1157,13 @@ def main():
     ap.add_argument("--holdings_csv", default="", help="Explicit current holdings CSV path. Required in production.")
     ap.add_argument("--current_csv", default="", help="DEPRECATED alias for --holdings_csv. Avoid using this.")
     ap.add_argument("--out_prefix", default="", help="Optional output prefix")
+
+    # AI overlay args
+    ap.add_argument("--ai_model_path", default="", help="Optional factor_weight_model.joblib path. If omitted, scoring stays baseline-only.")
+    ap.add_argument("--ai_raw_px_v", type=int, default=1, help="raw daily prices version for live dailyagg feature inference")
+    ap.add_argument("--ai_temperature", type=float, default=1.0)
+    ap.add_argument("--ai_cap_profit_accel_delta", type=float, default=-1.0, help="If >=0, clamp profit_accel share to baseline±delta")
+    ap.add_argument("--ai_overlay_strength", type=float, default=1.0, help="0=off, 1=full overlay")
     args = ap.parse_args()
 
     holdings_path = resolve_holdings_csv_arg(args.holdings_csv, args.current_csv)
@@ -612,6 +1204,11 @@ def main():
     if desc:
         print(f"[INFO] strategy desc: {desc}")
 
+    modules_cfg = load_strategy_modules_config(strat_path, args.strategy)
+    expectation_cfg = modules_cfg.get("expectation_overlay", {})
+    quality_penalty_cfg = modules_cfg.get("quality_soft_penalty", {})
+    mcap_grouping_cfg = modules_cfg.get("mcap_grouping", {})
+
     group_col = args.group_col.strip() or detect_group_col(feat)
     if group_col and group_col in feat.columns:
         print(f"[OK] group column detected: {group_col}")
@@ -619,6 +1216,8 @@ def main():
         group_col = None
         if args.max_per_group > 0:
             print("[WARN] max_per_group requested but no usable group column detected")
+
+    price_hist = load_price_history(args.asof, args.metric)
 
     g = feat.loc[feat["rebalance_month"] == target_dt].copy()
     g = ensure_filter_alias_columns(g)
@@ -633,7 +1232,21 @@ def main():
     current_for_bonus = validate_holdings_csv(current_for_bonus, holdings_path)
     current_tickers = set(current_for_bonus["ticker"].astype(str).tolist())
 
-    full_scored, scored_only = make_scores_full_universe(
+    # optional AI overlay bundle
+    ai_bundle = None
+    ai_raw_px = None
+    if args.ai_model_path.strip():
+        ai_bundle = _load_ai_overlay_bundle(args.ai_model_path.strip())
+        raw_px_path = _pick_raw_prices_path(args.asof, int(args.ai_raw_px_v))
+        if raw_px_path is None:
+            raise FileNotFoundError(
+                f"AI overlay requested but raw prices file not found for asof={args.asof}, raw_px_v={args.ai_raw_px_v}"
+            )
+        ai_raw_px = _load_raw_prices(raw_px_path)
+        print(f"[OK] ai overlay model : {args.ai_model_path}")
+        print(f"[OK] ai raw prices    : {raw_px_path}")
+
+    full_scored, scored_only, ai_overlay_info = make_scores_full_universe(
         g=g,
         weights=weights,
         filters=filters,
@@ -647,17 +1260,27 @@ def main():
         current_tickers=current_tickers,
         raw_factors=resolved_raw_factors,
         clip_tiers=resolved_clip_tiers,
+        ai_bundle=ai_bundle,
+        ai_raw_px=ai_raw_px,
+        ai_temperature=float(args.ai_temperature),
+        ai_cap_profit_accel_delta=None if float(args.ai_cap_profit_accel_delta) < 0 else float(args.ai_cap_profit_accel_delta),
+        ai_overlay_strength=float(args.ai_overlay_strength),
+        price_history=price_hist,
+        expectation_cfg=expectation_cfg,
+        quality_penalty_cfg=quality_penalty_cfg,
     )
 
     scored_sorted = scored_only.sort_values(["score_adj", "score", "ticker"], ascending=[False, False, True]).reset_index(drop=True)
     effective_group_col = group_col if (group_col and group_col in scored_sorted.columns) else detect_group_col(scored_sorted)
-    target_topk = select_target_portfolio(
+    target_topk = select_target_portfolio_with_mcap_groups(
         scored_sorted,
         portfolio_size=resolved_portfolio_size,
         keep_current_top_n=resolved_keep_current_top_n,
         effective_group_col=effective_group_col,
         max_per_group=int(args.max_per_group),
         current_tickers=current_tickers,
+        base_selector=select_target_portfolio,
+        grouping_cfg=mcap_grouping_cfg,
     ).copy()
     selected_set = set(target_topk["ticker"].astype(str).tolist())
 
@@ -703,19 +1326,42 @@ def main():
         "clip_tiers": resolved_clip_tiers,
         "portfolio_size": resolved_portfolio_size,
         "keep_current_top_n": resolved_keep_current_top_n,
+        "ai_overlay_active": bool(ai_bundle is not None),
+        "ai_model_path": args.ai_model_path.strip(),
+        "ai_temperature": float(args.ai_temperature),
+        "ai_cap_profit_accel_delta": None if float(args.ai_cap_profit_accel_delta) < 0 else float(args.ai_cap_profit_accel_delta),
+        "ai_overlay_strength": float(args.ai_overlay_strength),
+        "expectation_overlay": expectation_cfg,
+        "quality_soft_penalty": quality_penalty_cfg,
+        "mcap_grouping": mcap_grouping_cfg,
     }
+    if ai_overlay_info is not None:
+        coverage["ai_pred_alpha"] = ai_overlay_info["pred_alpha"]
+        coverage["ai_base_share"] = ai_overlay_info["base_share"]
+        coverage["ai_dyn_share"] = ai_overlay_info["dyn_share"]
+        coverage["ai_bucket_multipliers"] = ai_overlay_info["bucket_multipliers"]
+        coverage["ai_history_rebalance_month"] = str(pd.Timestamp(ai_overlay_info["history_rebalance_month"]).date()) if pd.notna(ai_overlay_info["history_rebalance_month"]) else None
     out_cov = Path(out_prefix + "__coverage.json")
     out_cov.write_text(json.dumps(coverage, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    print("=" * 100)
+    print("=" * 110)
     print(f"[LATEST REBALANCE SCORE] target date : {target_dt.date()}")
     print(f"[LATEST REBALANCE SCORE] cohort size  : {len(g)}")
     print(f"[LATEST REBALANCE SCORE] passed      : {int(full_scored['passed_filters'].sum())}")
     print(f"[LATEST REBALANCE SCORE] selected    : {len(target_topk)}")
-    print("=" * 100)
+    if ai_overlay_info is not None:
+        print(f"[AI OVERLAY] pred_alpha         : {ai_overlay_info['pred_alpha']}")
+        print(f"[AI OVERLAY] dyn_share          : {ai_overlay_info['dyn_share']}")
+        print(f"[AI OVERLAY] bucket_multipliers : {ai_overlay_info['bucket_multipliers']}")
+    print("=" * 110)
 
     show_top = [c for c in [
-        "ticker", "name", "score", "score_adj", "hold_bonus_applied", "score_rank", "score_adj_rank", "selection_bucket", group_col,
+        "ticker", "name", "score_base", "score", "score_adj", "hold_bonus_applied", "score_rank", "score_adj_rank",
+        "selection_bucket", group_col, "mcap_group", "mcap_rank_pct", "mcap_group_selection_reason",
+        "ai_overlay_active", "expectation_overlay_active", "expectation_score", "expectation_penalty",
+        "quality_soft_penalty_active", "quality_penalty_total",
+        "ai_pred_alpha__profit_accel", "ai_pred_alpha__revenue_support", "ai_pred_alpha__balance_sheet",
+        "ai_bucket_mult__profit_accel", "ai_bucket_mult__revenue_support", "ai_bucket_mult__balance_sheet",
         "OpIncome_acc2__raw", "OpIncome_acc2__contrib",
         "OpIncome_acc2_log1p__raw", "OpIncome_acc2_log1p__contrib",
         "op_growth_streak2__raw", "op_growth_streak2__contrib",
@@ -723,7 +1369,7 @@ def main():
         "rev_growth_streak2__raw", "rev_growth_streak2__contrib",
         "Debt_to_Equity_log__raw", "Debt_to_Equity_log__contrib",
         "Quality_CFO_to_Assets__raw", "Quality_CFO_to_Assets__contrib",
-        "CFO_isnull", "CFO_isnull__contrib",
+        "CFO_isnull",
     ] if c and c in target_topk.columns]
 
     print("\n[TOP-K TARGET]")
@@ -797,10 +1443,14 @@ def main():
         "current_price", "price_date", "current_value", "current_weight",
         "cohort_status", "score_availability_reason", "filter_status", "passed_filters", "selected_topk", "in_target_topk",
         "latest_available_rebalance_month", "latest_available_year", "latest_available_quarter",
-        "score", "score_rank", group_col,
+        "score_base", "score", "score_rank", group_col, "mcap_group", "mcap_rank_pct",
+        "expectation_overlay_active", "expectation_score", "expectation_penalty",
+        "quality_soft_penalty_active", "quality_penalty_total",
+        "ai_pred_alpha__profit_accel", "ai_pred_alpha__revenue_support", "ai_pred_alpha__balance_sheet",
+        "ai_bucket_mult__profit_accel", "ai_bucket_mult__revenue_support", "ai_bucket_mult__balance_sheet",
         "OpIncome_acc2__raw", "OpIncome_acc2_log1p__raw", "op_growth_streak2__raw", "Revenue_acc2__raw", "rev_growth_streak2__raw",
         "Debt_to_Equity_log__raw", "Quality_CFO_to_Assets__raw",
-        "CFO_isnull", "CFO_isnull__contrib",
+        "CFO_isnull",
     ] if c and c in inspect.columns]
 
     print("\n[CURRENT HOLDINGS INSPECTION]")

@@ -1,9 +1,0 @@
-# step 1 경로/참조 무결성 점검
-python .\scripts\ops\audit_data_layout.py `
-  --asof 2026-03-29 `
-  --metric revenue_op `
-  --strategy D_quality_filter_debt_profitaccel_liq `
-  --feat_v 3291 `
-  --action_v 3291 `
-  --report_v 3291 `
-  --output_json .\data\processed\audit_data_layout__asof=2026-03-29__v=1.json

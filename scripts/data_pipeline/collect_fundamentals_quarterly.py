@@ -462,12 +462,17 @@ def _fetch_finstate_all(
         lp=lp,
         desc=f"finstate_all corp={corp_code} year={year} reprt={reprt} fs={fs_div}",
     )
+
     if df is None or len(df) == 0:
-        RAW.mkdir(parents=True, exist_ok=True)
-        _parquet_atomic(pd.DataFrame(), p)
+        _write_log(
+            f"[WARN] empty finstate_all response (not cached): "
+            f"corp={corp_code} year={year} reprt={reprt} fs={fs_div}",
+            lp,
+        )
         return pd.DataFrame()
 
     _ensure_cols(df, ["sj_div", "account_id", "account_nm", "thstrm_amount", "thstrm_add_amount"])
+    RAW.mkdir(parents=True, exist_ok=True)
     _parquet_atomic(df, p)
     return df
 
@@ -483,42 +488,63 @@ def _fetch_finstate_with_fallback(
     lp: Path,
 ):
     """
-    개선된 fallback 순서:
-    1. finstate_all(CFS)
-    2. finstate(CFS)
-    3. finstate_all(OFS)
-    4. finstate(OFS)
+    fallback 순서:
+    1. finstate_all(primary_fs)
+    2. finstate(primary_fs)
+    3. finstate_all(other_fs)
+    4. finstate(other_fs)
     """
 
     def _try_finstate_all(fs):
         try:
             return _fetch_finstate_all(dart, corp_code, year, reprt, fs, asof, force, lp)
-        except Exception:
+        except Exception as e:
+            _write_log(
+                f"[WARN] finstate_all failed: corp={corp_code} year={year} reprt={reprt} fs={fs} "
+                f"err={type(e).__name__}: {e}",
+                lp,
+            )
             return pd.DataFrame()
 
     def _try_finstate(fs):
         try:
-            df = dart.finstate(corp_code, year, reprt_code=reprt, fs_div=fs)
+            # 현재 설치된 OpenDartReader 버전에서는 finstate()가 fs_div 인자를 받지 않음
+            df = dart.finstate(corp_code, year, reprt_code=reprt)
+
             if df is None or len(df) == 0:
+                _write_log(
+                    f"[WARN] empty finstate response: corp={corp_code} year={year} reprt={reprt} fs={fs}",
+                    lp,
+                )
                 return pd.DataFrame()
+
             _ensure_cols(df, ["sj_div", "account_id", "account_nm", "thstrm_amount", "thstrm_add_amount"])
+
+            # finstate()는 fs_div 후처리만 가능
+            if "fs_div" in df.columns:
+                sub = df[df["fs_div"].astype(str) == str(fs)].copy()
+                if len(sub) > 0:
+                    return sub
+
             return df
-        except Exception:
+        except Exception as e:
+            _write_log(
+                f"[WARN] finstate failed: corp={corp_code} year={year} reprt={reprt} fs={fs} "
+                f"err={type(e).__name__}: {e}",
+                lp,
+            )
             return pd.DataFrame()
 
-    order = []
     if primary_fs == "CFS":
         order = ["CFS", "OFS"]
     else:
         order = ["OFS", "CFS"]
 
     for fs in order:
-        # 1️⃣ finstate_all
         df = _try_finstate_all(fs)
         if df is not None and len(df) > 0:
             return df, fs
 
-        # 2️⃣ finstate fallback
         df = _try_finstate(fs)
         if df is not None and len(df) > 0:
             _write_log(f"[INFO] finstate fallback used: corp={corp_code} year={year} reprt={reprt} fs={fs}", lp)
@@ -582,11 +608,6 @@ def _available_quarters_for_year(year: int, asof_ts: pd.Timestamp) -> set[int]:
 
 
 def _filter_available_quarters(df: pd.DataFrame, asof: str) -> pd.DataFrame:
-    """
-    Point-in-time safety:
-    keep only quarters that should be observable by the given asof date.
-    Example: asof=2025-11-16 -> allow 2025 Q1,Q2,Q3 and drop 2025 Q4.
-    """
     if df is None or len(df) == 0:
         return df
 
@@ -603,6 +624,39 @@ def _filter_available_quarters(df: pd.DataFrame, asof: str) -> pd.DataFrame:
         ((out["year"] == cutoff_year) & (out["quarter"] <= cutoff_quarter))
     )
     return out.loc[mask].copy()
+
+
+def _count_present_values(d: dict[str, float | None], keys: list[str]) -> int:
+    cnt = 0
+    for k in keys:
+        v = d.get(k)
+        if v is not None and (not pd.isna(v)):
+            cnt += 1
+    return cnt
+
+
+def _summarize_fin_df(fin_df: pd.DataFrame) -> str:
+    if fin_df is None or len(fin_df) == 0:
+        return "rows=0"
+
+    cols = list(fin_df.columns)
+    sj = {}
+    if "sj_div" in fin_df.columns:
+        try:
+            sj = fin_df["sj_div"].astype(str).value_counts(dropna=False).to_dict()
+        except Exception:
+            sj = {}
+
+    sample_accounts = []
+    if "account_nm" in fin_df.columns:
+        try:
+            sample_accounts = (
+                fin_df["account_nm"].astype(str).dropna().drop_duplicates().head(8).tolist()
+            )
+        except Exception:
+            sample_accounts = []
+
+    return f"rows={len(fin_df)} cols={cols} sj_div={sj} sample_accounts={sample_accounts}"
 
 
 def main() -> None:
@@ -690,6 +744,7 @@ def main() -> None:
     ok_cnt = 0
     skip_cnt = 0
     err_cnt = 0
+    no_row_ticker_cnt = 0
     asof_ts = pd.to_datetime(asof)
 
     for i, r in df_work.iterrows():
@@ -705,6 +760,7 @@ def main() -> None:
         _write_log(f"[{i+1}/{len(df_work)}] {ticker} {name} corp={corp_code}", lp)
 
         try:
+            ticker_rows_added = 0
             years = list(range(start_year, end_year + 1))
 
             for y in years:
@@ -720,7 +776,11 @@ def main() -> None:
                 if len(missing_quarters) == 0:
                     continue
 
-                needed_reprts = [REPRT_Q1, REPRT_H1, REPRT_Q3, REPRT_Y] if args.force else _required_reprts_for_missing_quarters(missing_quarters)
+                needed_reprts = (
+                    [REPRT_Q1, REPRT_H1, REPRT_Q3, REPRT_Y]
+                    if args.force
+                    else _required_reprts_for_missing_quarters(missing_quarters)
+                )
 
                 fin_map: dict[str, pd.DataFrame] = {}
                 fs_used_map: dict[str, str | None] = {}
@@ -739,6 +799,11 @@ def main() -> None:
                 fin_y = fin_map.get(REPRT_Y, pd.DataFrame())
 
                 if all(fin is None or len(fin) == 0 for fin in [fin_q1, fin_h1, fin_q3, fin_y]):
+                    _write_log(
+                        f"[WARN] no finstate rows at all -> skip year: "
+                        f"{ticker} {name} corp={corp_code} year={y}",
+                        lp,
+                    )
                     continue
 
                 empty = {k: None for k in list(FLOW_KEYS) + list(STOCK_KEYS)}
@@ -746,21 +811,24 @@ def main() -> None:
                 cum_h1 = _extract_metrics(fin_h1, REPRT_H1) if fin_h1 is not None and len(fin_h1) else empty
                 cum_q3 = _extract_metrics(fin_q3, REPRT_Q3) if fin_q3 is not None and len(fin_q3) else empty
                 cum_y = _extract_metrics(fin_y, REPRT_Y) if fin_y is not None and len(fin_y) else empty
-                
+
                 all_cum = [cum_q1, cum_h1, cum_q3, cum_y]
-                valid_metrics = [
-                    v
-                    for dct in all_cum
-                    for v in [dct.get(k) for k in (FLOW_KEYS + STOCK_KEYS)]
-                    if (v is not None) and (not pd.isna(v)) and (float(v) != 0.0)
-                ]
-                if len(valid_metrics) == 0:
+                present_metric_count = sum(
+                    _count_present_values(dct, FLOW_KEYS + STOCK_KEYS) for dct in all_cum
+                )
+
+                if present_metric_count == 0:
                     _write_log(
-                        f"[WARN] no usable metrics → skip: {ticker} {name} corp={corp_code} year={y}",
-                        lp
+                        f"[WARN] no parsed metrics -> skip: "
+                        f"{ticker} {name} corp={corp_code} year={y} | "
+                        f"Q1[{_summarize_fin_df(fin_q1)}] "
+                        f"H1[{_summarize_fin_df(fin_h1)}] "
+                        f"Q3[{_summarize_fin_df(fin_q3)}] "
+                        f"Y[{_summarize_fin_df(fin_y)}]",
+                        lp,
                     )
                     continue
-                
+
                 qrows = _quarterize(cum_q1, cum_h1, cum_q3, cum_y)
                 fs_map = {
                     1: fs_used_map.get(REPRT_Q1),
@@ -776,6 +844,7 @@ def main() -> None:
                         continue
                     if dct is None:
                         continue
+
                     rows.append({
                         "ticker": ticker,
                         "name": name,
@@ -787,8 +856,13 @@ def main() -> None:
                         "fs_div_used": fs_map.get(q),
                         **{k: dct.get(k) for k in FLOW_KEYS + STOCK_KEYS},
                     })
+                    ticker_rows_added += 1
 
-            ok_cnt += 1
+            if ticker_rows_added > 0:
+                ok_cnt += 1
+            else:
+                no_row_ticker_cnt += 1
+                _write_log(f"[WARN] ticker produced no rows: {ticker} {name} corp={corp_code}", lp)
 
         except Exception as e:
             err_cnt += 1
@@ -796,6 +870,9 @@ def main() -> None:
             continue
 
     new_df = pd.DataFrame(rows)
+
+    if len(new_df) == 0:
+        _write_log("[ERR] new_df is empty after collection. This indicates parse/filter failure, not a normal success.", lp)
 
     if args.merge_existing and len(existing) > 0:
         out_df = pd.concat([existing, new_df], ignore_index=True)
@@ -809,7 +886,7 @@ def main() -> None:
     _parquet_atomic(out_df, out_path)
     _write_log(
         f"[OK] saved: {out_path} rows={len(out_df)} new_rows={len(new_df)} "
-        f"tickers_ok={ok_cnt} skipped={skip_cnt} err={err_cnt}",
+        f"tickers_ok={ok_cnt} skipped={skip_cnt} err={err_cnt} no_row_tickers={no_row_ticker_cnt}",
         lp,
     )
 

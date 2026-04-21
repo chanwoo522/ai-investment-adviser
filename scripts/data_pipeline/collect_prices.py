@@ -158,6 +158,10 @@ def main() -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
 
     tickers = _collect_union_tickers(asof, args.metric)
+    # ---- benchmark ETF 강제 포함 ----
+    BENCHMARK_TICKERS = ["069500"]  # KODEX 200
+    tickers = sorted(set(tickers) | set(BENCHMARK_TICKERS))
+    # --------------------------------
     if not tickers:
         raise RuntimeError("No union tickers available for collect_prices.")
 

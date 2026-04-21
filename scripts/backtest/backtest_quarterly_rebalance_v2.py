@@ -22,6 +22,13 @@ try:
 except Exception:
     yaml = None
 
+from common.portfolio_modules import (
+    load_strategy_modules_config,
+    apply_expectation_overlay,
+    apply_quality_soft_penalty,
+    select_target_portfolio_with_mcap_groups,
+)
+
 
 def _load_yaml_unique(path: Path) -> dict:
     if yaml is None:
@@ -885,6 +892,11 @@ def main():
         resolved_raw_factors = [c for c in weights.keys() if c in {"op_growth_streak2", "rev_growth_streak2"}]
     resolved_portfolio_size = int(runtime_cfg.get("portfolio_size", args.k)) if runtime_cfg else int(args.k)
     resolved_keep_current_top_n = int(runtime_cfg.get("keep_current_top_n", 0)) if runtime_cfg else 0
+    modules_cfg = load_strategy_modules_config(strat_path, args.strategy)
+    expectation_cfg = modules_cfg.get("expectation_overlay", {})
+    quality_penalty_cfg = modules_cfg.get("quality_soft_penalty", {})
+    mcap_grouping_cfg = modules_cfg.get("mcap_grouping", {})
+
     meta["hold_bonus"] = resolved_hold_bonus
     meta["clip_z"] = resolved_clip_z
     meta["clip_tiers"] = resolved_clip_tiers
@@ -892,6 +904,9 @@ def main():
     meta["use_robust_z"] = resolved_use_robust_z
     meta["portfolio_size"] = resolved_portfolio_size
     meta["keep_current_top_n"] = resolved_keep_current_top_n
+    meta["expectation_overlay"] = expectation_cfg
+    meta["quality_soft_penalty"] = quality_penalty_cfg
+    meta["mcap_grouping"] = mcap_grouping_cfg
     out_meta.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"[OK] strategies_yaml: {strat_path}")
@@ -956,6 +971,17 @@ def main():
             gg[f"{c}__contrib"] = contrib
             gg["score_total"] += contrib
 
+        gg = apply_expectation_overlay(
+            gg,
+            expectation_cfg,
+            asof_date=rm,
+            price_history=price_hist,
+        )
+        gg = apply_quality_soft_penalty(
+            gg,
+            quality_penalty_cfg,
+        )
+
         gg["score"] = gg["score_total"]
         gg["score_rank"] = gg["score_total"].rank(ascending=False, method="min")
         gg["rebalance_month"] = rm
@@ -967,7 +993,34 @@ def main():
                 if col in gg.columns:
                     keep.append(col)
 
-        for c in ["name", "corp_code", "year", "quarter", "CFO_isnull", "CFO_warn", group_col]:
+        for c in [
+            "expectation_overlay_active",
+            "expectation_component_count",
+            "expectation_valuation_z",
+            "expectation_mom6_z",
+            "expectation_mom12_z",
+            "expectation_score",
+            "expectation_penalty",
+            "score_total_pre_expect",
+            "score_total_post_expect",
+            "quality_soft_penalty_active",
+            "quality_penalty_netincome_ttm_nonpositive",
+            "quality_penalty_netincome_acc2_negative",
+            "quality_penalty_cfo_warn",
+            "quality_penalty_cfo_isnull",
+            "quality_penalty_total",
+            "score_total_pre_quality",
+            "score_total_post_quality",
+            "mcap",
+            "mcap_rank_pct",
+            "mcap_group",
+            "mcap_grouping_active",
+            "mcap_group_selection_reason",
+        ]:
+            if c in gg.columns and c not in keep:
+                keep.append(c)
+
+        for c in ["name", "corp_code", "year", "quarter", "CFO_isnull", "CFO_warn", "NetIncome_ttm", "NetIncome_acc2", group_col]:
             if c and c in gg.columns and c not in keep:
                 keep.insert(1, c)
 
@@ -1014,13 +1067,15 @@ def main():
         scored = scored.sort_values(["score_adj", "score", "ticker"], ascending=[False, False, True], na_position="last").reset_index(drop=True)
 
         effective_group_col = group_col if (group_col and group_col in scored.columns) else detect_group_col(scored)
-        picked = select_target_portfolio(
+        picked = select_target_portfolio_with_mcap_groups(
             scored,
             portfolio_size=resolved_portfolio_size,
             keep_current_top_n=resolved_keep_current_top_n,
             effective_group_col=effective_group_col,
             max_per_group=int(args.max_per_group),
             current_tickers=prev_hold or set(),
+            base_selector=select_target_portfolio,
+            grouping_cfg=mcap_grouping_cfg,
         )
         picked["rebalance_month_end"] = picked["rebalance_month"]
 
@@ -1032,10 +1087,10 @@ def main():
                 newcomers = newcomers[newcomers["score_adj"] >= (cutoff + float(args.entry_gap))]
                 tmp = pd.concat([keepers, newcomers], ignore_index=True).sort_values("score_adj", ascending=False)
                 effective_group_col = group_col if (group_col and group_col in tmp.columns) else detect_group_col(tmp)
-                picked = select_target_portfolio(tmp, resolved_portfolio_size, resolved_keep_current_top_n, effective_group_col, int(args.max_per_group), prev_hold or set())
+                picked = select_target_portfolio_with_mcap_groups(tmp, portfolio_size=resolved_portfolio_size, keep_current_top_n=resolved_keep_current_top_n, effective_group_col=effective_group_col, max_per_group=int(args.max_per_group), current_tickers=prev_hold or set(), base_selector=select_target_portfolio, grouping_cfg=mcap_grouping_cfg)
             if len(picked) < resolved_portfolio_size:
                 effective_group_col = group_col if (group_col and group_col in scored.columns) else detect_group_col(scored)
-                picked = select_target_portfolio(scored, resolved_portfolio_size, resolved_keep_current_top_n, effective_group_col, int(args.max_per_group), prev_hold or set())
+                picked = select_target_portfolio_with_mcap_groups(scored, portfolio_size=resolved_portfolio_size, keep_current_top_n=resolved_keep_current_top_n, effective_group_col=effective_group_col, max_per_group=int(args.max_per_group), current_tickers=prev_hold or set(), base_selector=select_target_portfolio, grouping_cfg=mcap_grouping_cfg)
                 picked["rebalance_month_end"] = picked["rebalance_month"]
 
         n_hold = max(len(picked), 1)

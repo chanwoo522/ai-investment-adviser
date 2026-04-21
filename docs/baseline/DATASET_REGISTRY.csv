@@ -1,5 +1,0 @@
-﻿dataset,path,producer,consumer,rebuildable,importance,status
-holdings,data/portfolio/current,manual,live,NO,CRITICAL,PROTECT
-features_live,data/features/features_live,make_features_live,score,YES,CRITICAL,PROTECT
-marketdata,data/processed/krx_marketdata,collector,live,YES,CRITICAL,PROTECT
-prices_daily,data/processed/prices_daily,price_builder,execution,YES,HIGH,PROTECT

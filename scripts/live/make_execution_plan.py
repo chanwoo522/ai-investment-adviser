@@ -95,7 +95,6 @@ def load_prices_from_processed(asof: str, metric: str, ret_v: int, price_date: s
         keep_cols.append(volume_col)
 
     px = df[keep_cols].copy()
-
     rename_map = {
         ticker_col: "ticker",
         date_col: "date",
@@ -123,14 +122,10 @@ def load_prices_from_processed(asof: str, metric: str, ret_v: int, price_date: s
         px = px[px["date"] <= cutoff].copy()
 
     px = px.sort_values(["ticker", "date"]).copy()
-
-    # 최근 20거래일 평균 거래대금 proxy
     px["adv20_value"] = (
         px.groupby("ticker")["daily_traded_value"]
         .transform(lambda s: s.rolling(20, min_periods=1).mean())
     )
-
-    # ticker별 마지막 row만 사용
     px = px.drop_duplicates("ticker", keep="last").copy()
 
     return px[["ticker", "price", "adv20_value", "date"]]
@@ -154,10 +149,22 @@ def main() -> None:
     ap.add_argument("--metric", default="revenue_op")
     ap.add_argument("--ret_v", type=int, default=2)
     ap.add_argument("--price_date", default=None)
+    ap.add_argument("--dry_run", action="store_true")
 
     args = ap.parse_args()
 
-    cfg = load_yaml(args.config)
+    actions_path = Path(args.actions_csv)
+    config_path = Path(args.config)
+    if not actions_path.exists():
+        raise FileNotFoundError(f"actions_csv not found: {actions_path}")
+    if not config_path.exists():
+        raise FileNotFoundError(f"config not found: {config_path}")
+    if args.total_capital <= 0 and not args.dry_run:
+        raise ValueError("total_capital must be > 0")
+
+    cfg = load_yaml(config_path)
+    if not isinstance(cfg, dict) or "execution" not in cfg:
+        raise ValueError("config must contain top-level 'execution' section")
     exec_cfg = cfg["execution"]
 
     split_ratio_buy = exec_cfg.get("split_ratio_buy", [0.4, 0.3, 0.3])
@@ -167,19 +174,16 @@ def main() -> None:
             f"execution split ratios must each have length 3. got buy={split_ratio_buy}, sell={split_ratio_sell}"
         )
     max_adv_ratio = float(exec_cfg.get("max_adv_ratio", 0.15))
+    min_notional_per_order = float(exec_cfg.get("min_notional_per_order", 0))
+    round_lot = int(exec_cfg.get("round_lot", 1) or 1)
     base_bps = float(exec_cfg.get("slippage", {}).get("base_bps", 5))
     impact_coef = float(exec_cfg.get("slippage", {}).get("adv_impact_coef", 10))
-
-    actions_path = Path(args.actions_csv)
-    if not actions_path.exists():
-        raise FileNotFoundError(f"actions_csv not found: {actions_path}")
 
     act = pd.read_csv(actions_path)
     if "ticker" not in act.columns:
         raise ValueError("actions_csv must contain 'ticker'")
 
     act["ticker"] = normalize_ticker(act["ticker"])
-
     if "shares" not in act.columns:
         act["shares"] = 0
     act["shares"] = pd.to_numeric(act["shares"], errors="coerce").fillna(0)
@@ -208,7 +212,11 @@ def main() -> None:
     if n_target <= 0:
         raise ValueError("No target holdings found in actions file")
 
-    target_amount_each = args.total_capital / n_target
+    if df["price"].isna().any() and not args.dry_run:
+        bad = df.loc[df["price"].isna(), [c for c in ["ticker", "name", "name_final", "action"] if c in df.columns]]
+        raise ValueError("Missing prices for execution_plan:\n" + bad.to_string(index=False))
+
+    target_amount_each = 0.0 if args.dry_run else (args.total_capital / n_target)
 
     df["current_value"] = df["shares"] * df["price"]
     df["target_value"] = 0.0
@@ -252,17 +260,15 @@ def main() -> None:
 
         for i, r in enumerate(ratio_vec, start=1):
             raw_value = abs_trade_value * float(r)
-
-            if pd.notna(cap) and cap > 0:
-                use_value = min(raw_value, cap)
-            else:
-                use_value = raw_value
-
+            use_value = min(raw_value, cap) if pd.notna(cap) and cap > 0 else raw_value
             if pd.isna(price) or price <= 0 or use_value <= 0:
                 qty = 0
             else:
                 qty = math.floor(use_value / price)
-
+                if round_lot > 1:
+                    qty = (qty // round_lot) * round_lot
+                if qty > 0 and (qty * price) < min_notional_per_order:
+                    qty = 0
             df.at[idx, f"day{i}_qty"] = qty
             df.at[idx, f"day{i}_order_value"] = qty * price if qty > 0 else 0.0
 
@@ -284,33 +290,11 @@ def main() -> None:
     )
 
     out_cols = [
-        "ticker",
-        "name_final",
-        "action",
-        "reason",
-        "shares",
-        "price",
-        "adv20_value",
-        "current_value",
-        "target_value",
-        "trade_value",
-        "order_side",
-        "max_day_value",
-        "day1_qty",
-        "day1_order_value",
-        "day2_qty",
-        "day2_order_value",
-        "day3_qty",
-        "day3_order_value",
-        "planned_total_qty",
-        "planned_total_value",
-        "unplanned_value",
-        "est_slippage_bps",
-        "score",
-        "score_rank",
-        "industry_code",
-        "industry_name",
-        "industry4",
+        "ticker", "name_final", "action", "reason", "shares", "price", "adv20_value",
+        "current_value", "target_value", "trade_value", "order_side", "max_day_value",
+        "day1_qty", "day1_order_value", "day2_qty", "day2_order_value", "day3_qty", "day3_order_value",
+        "planned_total_qty", "planned_total_value", "unplanned_value", "est_slippage_bps",
+        "score", "score_rank", "industry_code", "industry_name", "industry4",
     ]
     out_cols = [c for c in out_cols if c in df.columns]
     out = df[out_cols].copy()
@@ -324,15 +308,23 @@ def main() -> None:
     out = out.drop(columns=["_ord"]).reset_index(drop=True)
 
     out_path = Path(f"data/processed/execution_plan__total={int(args.total_capital)}__v={args.out_v}.csv")
-    out.to_csv(out_path, index=False, encoding="utf-8-sig")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    if args.dry_run:
+        print(f"[DRYRUN] would save: {out_path}")
+        print("\n[ORDER SIDE COUNTS]")
+        print(out["order_side"].value_counts(dropna=False).to_string())
+        print(f"\n[INFO] rows={len(out)} targets={n_target}")
+        print("\n[PREVIEW]")
+        print(out.head(30).to_string(index=False))
+        return
+
+    out.to_csv(out_path, index=False, encoding="utf-8-sig")
     print(f"[OK] saved: {out_path}")
     print("\n[ORDER SIDE COUNTS]")
     print(out["order_side"].value_counts(dropna=False).to_string())
-
     missing_price = out["price"].isnull().sum() if "price" in out.columns else len(out)
     print(f"\n[INFO] missing price rows: {missing_price}")
-
     print("\n[PREVIEW]")
     print(out.head(30).to_string(index=False))
 
