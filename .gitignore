@@ -18,6 +18,7 @@ dist/
 artifacts/
 legacy/
 ai_inv_adv.zip
+*.zip
 
 # Data outputs / raw data
 data/raw/
@@ -31,5 +32,22 @@ data/ai_filter/
 data_inventory_*/
 *.parquet
 
-# Optional local research scratch
+# Local generated helper files
+staged.txt
+data_files.txt
+git_diff_names.txt
+git_status_short.txt
+biggest_files.txt
+
+# Local scratch / trash
 research/
+data/raw_trash
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Optional: feature metadata outputs
+data/features/features_live/*.meta.json
