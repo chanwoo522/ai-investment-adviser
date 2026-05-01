@@ -45,6 +45,7 @@ data_files.txt
 git_diff_names.txt
 git_status_short.txt
 biggest_files.txt
+ai_model_search.txt
 
 # Local scratch / trash
 research/
