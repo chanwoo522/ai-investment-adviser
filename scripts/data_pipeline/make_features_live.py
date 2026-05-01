@@ -516,6 +516,66 @@ def _add_derived_columns(df: pd.DataFrame, cfo_col: str) -> dict:
     return notes
 
 
+def _append_next_quarter_target_rows(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    notes: dict[str, str] = {}
+    out = df.copy()
+
+    if "rebalance_month" not in out.columns or not {TICKER_COL, "year", "quarter"}.issubset(out.columns):
+        notes["future_target_extension"] = "skipped: missing rebalance_month/year/quarter/ticker"
+        return out, notes
+
+    out["rebalance_month"] = pd.to_datetime(out["rebalance_month"], errors="coerce")
+    latest_rb = out["rebalance_month"].dropna().max()
+    if pd.isna(latest_rb):
+        notes["future_target_extension"] = "skipped: no valid rebalance_month"
+        return out, notes
+
+    base = out.loc[out["rebalance_month"] == latest_rb].copy()
+    if len(base) == 0:
+        notes["future_target_extension"] = "skipped: latest rebalance cohort empty"
+        return out, notes
+
+    src_year = pd.to_numeric(base["year"], errors="coerce")
+    src_quarter = pd.to_numeric(base["quarter"], errors="coerce")
+    if src_year.isna().any() or src_quarter.isna().any():
+        notes["future_target_extension"] = "skipped: invalid year/quarter in latest cohort"
+        return out, notes
+
+    next_quarter = src_quarter.astype(int) + 1
+    next_year = src_year.astype(int)
+    wrap_mask = next_quarter > 4
+    next_quarter = next_quarter.where(~wrap_mask, 1)
+    next_year = next_year.where(~wrap_mask, next_year + 1)
+    next_rb = compute_rebalance_month_from_yq(next_year.astype(int), next_quarter.astype(int))
+
+    if (out["rebalance_month"].isin(pd.to_datetime(next_rb, errors="coerce"))).any():
+        if "synthetic_future_target" not in out.columns:
+            out["synthetic_future_target"] = 0
+        uniq_next = sorted({str(pd.Timestamp(x).date()) for x in pd.to_datetime(next_rb, errors="coerce").dropna().unique()})
+        notes["future_target_extension"] = f"skipped: next target already present ({uniq_next})"
+        return out, notes
+
+    if "synthetic_future_target" not in out.columns:
+        out["synthetic_future_target"] = 0
+    base["synthetic_future_target"] = 1
+    base["feature_source_rebalance_month"] = pd.Timestamp(latest_rb).strftime("%Y-%m-%d")
+    base["feature_source_year"] = src_year.astype(int)
+    base["feature_source_quarter"] = src_quarter.astype(int)
+    base["year"] = next_year.astype(int)
+    base["quarter"] = next_quarter.astype(int)
+    base["quarter_key"] = base["year"].astype(int) * 100 + base["quarter"].astype(int)
+    base["rebalance_month"] = pd.to_datetime(next_rb, errors="coerce")
+
+    out = pd.concat([out, base], ignore_index=True)
+    out = out.sort_values([TICKER_COL, "year", "quarter"]).drop_duplicates([TICKER_COL, "year", "quarter"], keep="last").copy()
+    uniq_next = sorted({str(pd.Timestamp(x).date()) for x in pd.to_datetime(base["rebalance_month"], errors="coerce").dropna().unique()})
+    notes["future_target_extension"] = (
+        f"appended synthetic next-quarter target rows: {len(base)} rows for "
+        f"{uniq_next} from source {pd.Timestamp(latest_rb).date()}"
+    )
+    return out, notes
+
+
 def _attach_group_map(df: pd.DataFrame, asof: str) -> tuple[pd.DataFrame, dict]:
     out = df.copy()
     notes: dict[str, str] = {}
@@ -626,6 +686,8 @@ def main() -> None:
     notes.update(notes3)
 
     df = _refresh_industry_from_reference(df)
+    df, notes4 = _append_next_quarter_target_rows(df)
+    notes.update(notes4)
 
     print(f"[INFO] rows: {len(df)}")
     print(f"[INFO] tickers: {df[TICKER_COL].nunique()}")
@@ -666,6 +728,7 @@ def main() -> None:
             "op_cur_q",
             "op_qoq",
             "OpIncome_acc2_log1p", "Revenue_acc2_log1p", "op_growth_streak2", "rev_growth_streak2",
+            "synthetic_future_target",
         ],
     )
 

@@ -59,11 +59,59 @@ function Parse-IsoDate([string]$Value) {
     return [datetime]::Parse($Value).ToString('yyyy-MM-dd')
 }
 
+function Infer-PrevRebalanceDate([string]$TargetDate) {
+    $dt = [datetime]::Parse($TargetDate)
+    $m = $dt.Month
+    $y = $dt.Year
+    if($m -eq 3){ return ([datetime]::new($y - 1, 11, 30)).ToString('yyyy-MM-dd') }
+    if($m -eq 5){ return ([datetime]::new($y, 3, 31)).ToString('yyyy-MM-dd') }
+    if($m -eq 8){ return ([datetime]::new($y, 5, 31)).ToString('yyyy-MM-dd') }
+    if($m -eq 11){ return ([datetime]::new($y, 8, 31)).ToString('yyyy-MM-dd') }
+    return $TargetDate
+}
+
 function Find-FirstExisting([string[]]$Paths) {
     foreach($p in $Paths){
         if($p -and (Test-Path $p)){ return (Resolve-Path $p).Path }
     }
     return $null
+}
+
+function Resolve-AutoHoldingsCsv([string]$HintDate) {
+    $bases = @(
+        @{ Path = ".\\data\\portfolio\\current"; Priority = 0 },
+        @{ Path = ".\\data\\portfolio\\history"; Priority = 1 },
+        @{ Path = ".\\dist\\ai_inv_adv_github_min\\data\\portfolio\\current"; Priority = 9 }
+    )
+    $cands = New-Object System.Collections.ArrayList
+    foreach($baseInfo in $bases){
+        $base = [string]$baseInfo.Path
+        $priority = [int]$baseInfo.Priority
+        if(!(Test-Path $base)){ continue }
+        $files = Get-ChildItem -LiteralPath $base -File -Filter "*holdings_clean.csv" -ErrorAction SilentlyContinue
+        foreach($f in $files){
+            $m = [regex]::Match($f.Name, '(\d{8})')
+            if(-not $m.Success){ continue }
+            try {
+                $d = [datetime]::ParseExact($m.Groups[1].Value, 'yyyyMMdd', $null)
+            } catch {
+                continue
+            }
+            [void]$cands.Add([pscustomobject]@{
+                Path = $f.FullName
+                FileDate = $d
+                Priority = $priority
+            })
+        }
+    }
+    if($cands.Count -eq 0){ throw "Could not auto-resolve holdings csv from data/portfolio/current, history, or dist fallback." }
+
+    $hint = [datetime]::Parse($HintDate)
+    $eligible = @($cands | Where-Object { $_.FileDate -le $hint } | Sort-Object FileDate, @{ Expression = "Priority"; Descending = $true }, Path)
+    if($eligible.Count -gt 0){ return $eligible[-1].Path }
+
+    $latest = @($cands | Sort-Object FileDate, @{ Expression = "Priority"; Descending = $true }, Path)
+    return $latest[-1].Path
 }
 
 function Write-Json([string]$Path, $Object) {
@@ -112,11 +160,11 @@ function Invoke-Step {
 
 $ASOF = Parse-IsoDate $ASOF
 $TARGET = Parse-IsoDate $TARGET
+$PrevRebalDate = if([string]::IsNullOrWhiteSpace($PrevRebalDate)){ Infer-PrevRebalanceDate $TARGET } else { Parse-IsoDate $PrevRebalDate }
+$HOLDINGS_CSV = if([string]::IsNullOrWhiteSpace($HOLDINGS_CSV)){ Resolve-AutoHoldingsCsv $PrevRebalDate } else { $HOLDINGS_CSV }
 if([string]::IsNullOrWhiteSpace($PerfHoldingsCsv)){ $PerfHoldingsCsv = $HOLDINGS_CSV }
-if([string]::IsNullOrWhiteSpace($PrevRebalDate)){ $PrevRebalDate = $TARGET }
 $PrevRebalDate = Parse-IsoDate $PrevRebalDate
 $PerfEnd = if($PerformanceEndDate){ Parse-IsoDate $PerformanceEndDate } else { $ASOF }
-if([string]::IsNullOrWhiteSpace($HOLDINGS_CSV)){ throw "HOLDINGS_CSV is required." }
 
 $script:PY = Resolve-Python
 Assert-File $script:PY "python"
@@ -137,6 +185,7 @@ $requiredDirs = @(
     "data\\live\\actions",
     "data\\live\\reports",
     "data\\live\\performance",
+    "data\\live\\kpi_snapshots",
     "data\\portfolio\\current",
     "data\\portfolio\\history"
 )
@@ -330,6 +379,24 @@ if(Test-Path $krxMetaPath){
     $manifest.provisional_source = $krxMeta.source
 }
 
+$kpiSnapshotPath = "data/live/kpi_snapshots/kpi_snapshot__asof=${ASOF}__target=${TARGET}.csv"
+$kpiArgs = @(
+    "--asof", $ASOF,
+    "--target", $TARGET,
+    "--metric", $METRIC,
+    "--strategy", $STRAT,
+    "--total_capital", "$TOTAL_VALUE",
+    "--performance_summary", $perfSummaryOut,
+    "--actions_csv", $actionsPath,
+    "--execution_plan", $execPath,
+    "--output_csv", $kpiSnapshotPath,
+    "--provisional_source", "$($manifest.provisional_source)"
+)
+if($manifest.provisional){
+    $kpiArgs += "--provisional"
+}
+Invoke-Step "save_kpi_snapshot" "scripts\\live\\save_kpi_snapshot.py" $kpiArgs $manifest
+
 $manifest.outputs.features_live = $featuresLivePath
 $manifest.outputs.scores_csv = $scoresPath
 $manifest.outputs.actions_csv = $actionsPath
@@ -340,6 +407,7 @@ $manifest.outputs.performance_contrib = $perfContribOut
 $manifest.outputs.report_md = $reportMd
 $manifest.outputs.report_html = $reportHtml
 $manifest.outputs.report_detail_csv = $reportDetail
+$manifest.outputs.kpi_snapshot = $kpiSnapshotPath
 
 Write-Json $manifestPath $manifest
 

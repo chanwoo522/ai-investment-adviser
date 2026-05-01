@@ -115,6 +115,18 @@ Representative wrapper:
   -PrevRebalDate 2026-03-31
 ```
 
+Minimum rerun command after upstream data is already ready:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\live\run_factor_composite_pipeline.ps1 -ASOF YYYY-MM-DD -TARGET YYYY-MM-DD -SkipPrepare
+```
+
+Operational note:
+
+- as of the validated dry-run, the next target rebalance month after `2026-03-31` is `2026-05-31`
+- this project uses the report-lag rebalance convention, not plain quarter-end
+- when `HOLDINGS_CSV` is omitted, the wrapper auto-selects the latest eligible `*holdings_clean.csv`
+
 ## Step 5. Live Action Generation
 
 Expected live outputs:
@@ -137,6 +149,7 @@ Expected report outputs:
 - markdown report
 - html report
 - detail csv
+- KPI snapshot csv
 
 The report should confirm:
 
@@ -144,6 +157,10 @@ The report should confirm:
 - data version
 - provisional status
 - fallback source if any
+
+KPI snapshot output:
+
+- `data/live/kpi_snapshots/kpi_snapshot__asof=YYYY-MM-DD__target=YYYY-MM-DD.csv`
 
 ## Step 7. Actual Execution
 
@@ -202,11 +219,41 @@ Do **not** use `--skip_prepare` if:
 - upstream data was partially regenerated
 - asof / version alignment is unclear
 
+For practical dry-runs, `--skip_prepare` is the intended mode after:
+
+1. `prepare_asof`
+2. feature stack build
+3. strategy comparison
+
+have already completed successfully for the same `asof`.
+
 ## Provisional / Fallback Handling
 
 If fallback or provisional status appears:
 
 - keep `provisional=true`
 - keep the fallback source in metadata and report text
+- keep benchmark fallback metadata as well when live benchmark fetch fails
 - do not treat the result as final production truth
 - rerun after primary `KRX / DART` recovery
+
+## Holdings Auto-Selection Priority
+
+When `HOLDINGS_CSV` is not explicitly passed, the live wrapper searches in this order:
+
+1. `data/portfolio/current`
+2. `data/portfolio/history`
+3. `dist/ai_inv_adv_github_min/data/portfolio/current`
+
+Within those locations it picks the latest `*holdings_clean.csv` whose embedded date is less than or equal to the inferred previous rebalance date.
+
+## PrevRebalDate Auto-Inference
+
+When `PrevRebalDate` is not explicitly passed, the wrapper infers it from `TARGET`:
+
+- `YYYY-03-31 -> previous YYYY-11-30`
+- `YYYY-05-31 -> previous YYYY-03-31`
+- `YYYY-08-31 -> previous YYYY-05-31`
+- `YYYY-11-30 -> previous YYYY-08-31`
+
+This lets the same wrapper be rerun next quarter by changing only `ASOF` and `TARGET`.

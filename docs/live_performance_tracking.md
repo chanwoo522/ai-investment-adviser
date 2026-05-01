@@ -17,6 +17,7 @@ For each live cycle, record:
 - slippage
 - realized trading cost
 - portfolio drift before the next rebalance
+- KPI snapshot
 
 ## Actual Portfolio Return Recording
 
@@ -28,6 +29,11 @@ Recommended outputs:
 - cumulative NAV
 - period return
 - benchmark-relative active return
+- KPI snapshot csv
+
+Snapshot location:
+
+- `data/live/kpi_snapshots/kpi_snapshot__asof=YYYY-MM-DD__target=YYYY-MM-DD.csv`
 
 ## Benchmark Comparison
 
@@ -50,6 +56,10 @@ Each rebalance should record:
 - names kept
 
 This helps explain differences between model return and actual live return.
+
+Turnover formula used in the live wrapper snapshot:
+
+- `turnover = sum(abs(trade_value)) / (2 * total_capital)`
 
 ## Slippage / Trading Cost Tracking
 
@@ -92,6 +102,12 @@ This connection matters because:
 - turnover depends on prior holdings
 - real execution history should drive the next cycle, not old target files
 
+If the wrapper is run without `HOLDINGS_CSV`, it auto-selects the latest eligible `*holdings_clean.csv` using:
+
+1. `data/portfolio/current`
+2. `data/portfolio/history`
+3. `dist/ai_inv_adv_github_min/data/portfolio/current`
+
 ## Recommended Minimal File Set Per Cycle
 
 Keep a minimal live archive for each rebalance:
@@ -103,3 +119,34 @@ Keep a minimal live archive for each rebalance:
 - benchmark comparison note
 
 These may live outside git if they are generated operational files.
+
+## KPI Snapshot Columns
+
+The current live wrapper stores the following snapshot columns:
+
+- `nav`
+- `cum_return`
+- `benchmark_return`
+- `active_return`
+- `turnover`
+- `topk_keep_rate`
+- `provisional`
+- `provisional_source`
+
+## topk_keep_rate Formula
+
+- `topk_keep_rate = |current_holdings ∩ target_topk| / K`
+
+This measures how much of the model target basket is already retained in the actual starting portfolio.
+
+## KPI Alert Thresholds
+
+Suggested first-pass alert thresholds:
+
+- `live_cagr - backtest_cagr_common < -0.05` for two consecutive quarters
+- `tracking_error` above expected backtest dispersion band
+- `turnover_ratio = realized_turnover / model_turnover > 1.25`
+- `slippage_dev_bps = realized_slippage_bps - assumed_tcost_bps > +20bp`
+- `topk_keep_rate < 0.80`
+
+If benchmark generation falls back from live fetch to local data, the resulting KPI snapshot should remain provisional.
