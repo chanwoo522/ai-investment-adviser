@@ -1,0 +1,28 @@
+name: smoke
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  py-compile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Smoke compile targeted scripts
+        run: |
+          python -m py_compile scripts/backtest/run_strategy_compare.py
+          python -m py_compile scripts/backtest/backtest_factor_composite_ai_variants.py
+          python -m py_compile scripts/factor_weight_ml/backtest_factor_weight_integrated_topk_walkforward.py
