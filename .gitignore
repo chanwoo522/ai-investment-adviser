@@ -5,6 +5,7 @@ __pycache__/
 
 # Backup / cache
 *.bak
+*.bak_*
 docs_cache/
 *.pkl
 

@@ -672,6 +672,7 @@ def main() -> None:
     pred_rows: list[dict[str, Any]] = []
     rebalance_rows: list[dict[str, Any]] = []
     holdings_rows: list[dict[str, Any]] = []
+    scored_rows: list[pd.DataFrame] = []
     monthly_rows: list[dict[str, Any]] = []
 
     prev_base_set: set[str] = set()
@@ -751,6 +752,34 @@ def main() -> None:
             scored[f"{c}__ai_mult"] = mult
             scored[f"{c}__contrib_ai"] = scored[f"{c}__contrib_base"] * mult
             scored["score_ai"] += scored[f"{c}__contrib_ai"]
+
+        scored_dump = scored.copy()
+        scored_dump["rebalance_month"] = rm
+        scored_dump["model_status"] = model_status
+        scored_dump["score_ai_rank"] = scored_dump["score_ai"].rank(ascending=False, method="min")
+        scored_dump["score_ai_rank_pct"] = (
+            scored_dump["score_ai"].rank(ascending=True, pct=True, method="average").astype("float64")
+            if len(scored_dump)
+            else np.nan
+        )
+        keep_scored_cols = [
+            c
+            for c in [
+                "rebalance_month",
+                "model_status",
+                "ticker",
+                "name",
+                group_col,
+                "score_base",
+                "score_baseline",
+                "score_ai",
+                "score_ai_rank",
+                "score_ai_rank_pct",
+                "fwd_return",
+            ]
+            if c and c in scored_dump.columns
+        ]
+        scored_rows.append(scored_dump[keep_scored_cols].copy())
 
         effective_group_col = group_col if group_col and group_col in scored.columns else None
         base_pick = select_top_k_with_group_cap(scored.copy(), int(args.k), effective_group_col, int(args.max_per_group)).copy()
@@ -856,6 +885,7 @@ def main() -> None:
     monthly = pd.DataFrame(monthly_rows)
     rebalance = pd.DataFrame(rebalance_rows)
     holdings = pd.DataFrame(holdings_rows)
+    scored_universe = pd.concat(scored_rows, ignore_index=True) if scored_rows else pd.DataFrame()
     regime_ds = pd.DataFrame(regime_rows)
     preds = pd.DataFrame(pred_rows)
 
@@ -865,6 +895,7 @@ def main() -> None:
     monthly_path = out_dir / "walkforward_integrated_monthly_nav.csv"
     rebalance_path = out_dir / "walkforward_integrated_rebalance_detail.csv"
     holdings_path = out_dir / "walkforward_integrated_holdings.csv"
+    scored_universe_path = out_dir / "walkforward_integrated_scored_universe.parquet"
     regime_path = out_dir / "walkforward_regime_dataset_used.parquet"
     preds_path = out_dir / "walkforward_oos_predictions.csv"
     summary_path = out_dir / "summary.json"
@@ -872,6 +903,7 @@ def main() -> None:
     monthly.to_csv(monthly_path, index=False, encoding="utf-8-sig")
     rebalance.to_csv(rebalance_path, index=False, encoding="utf-8-sig")
     holdings.to_csv(holdings_path, index=False, encoding="utf-8-sig")
+    scored_universe.to_parquet(scored_universe_path, index=False)
     regime_ds.to_parquet(regime_path, index=False)
     preds.to_csv(preds_path, index=False, encoding="utf-8-sig")
 
@@ -969,6 +1001,7 @@ def main() -> None:
     print(f"[OK] monthly  : {monthly_path}")
     print(f"[OK] rebalance: {rebalance_path}")
     print(f"[OK] holdings : {holdings_path}")
+    print(f"[OK] scored   : {scored_universe_path}")
     print(f"[OK] regime   : {regime_path}")
     print(f"[OK] preds    : {preds_path}")
     print(f"[OK] summary  : {summary_path}")

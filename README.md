@@ -34,13 +34,13 @@ The repository is organized so that a collaborator can rebuild the same pipeline
   - practical live filters
 - In current configuration, this is the operational live alias of the legacy production strategy family centered on `D_quality_filter_debt_profitaccel_liq`.
 
-### 3. `ai_wf_topk`
+### 3. `ai_wf_topk` (`experimental`)
 
 - Walk-forward AI directly reselects Top-K holdings.
 - Strong experimental strategy in the 10-year walk-forward comparison.
 - Must be treated carefully because higher performance can come with higher overfitting risk and turnover.
 
-### 4. `combo_overlay_replace`
+### 4. `combo_overlay_replace` (`experimental`)
 
 - Combines the composite strategy with the walk-forward AI strategy.
 - Intended as a defensive or blended allocation candidate rather than the default main strategy.
@@ -125,7 +125,7 @@ After fundamentals are ready, build the downstream feature stack:
 .\.venv\Scripts\python.exe .\scripts\data_pipeline\make_features_live.py --asof 2026-04-15 --metric revenue_op --in_v 3291 --out_v 3291 --save_meta
 ```
 
-## 4-Strategy Comparison Command
+## Strategy Comparison Command
 
 If the feature stack is already ready, reuse it and skip internal preparation:
 
@@ -154,6 +154,48 @@ If the feature stack is already ready, reuse it and skip internal preparation:
   --out_dir artifacts\strategy_compare\asof=2026-04-15
 ```
 
+Use `--skip_prepare` only when all of the following are already ready:
+
+- `features_live`
+- monthly returns
+- factor regime dataset inputs
+- raw price inputs required by the AI walk-forward layer
+- KRX / DART collection outputs needed by the comparison
+
+Current comparison set includes 7 strategies:
+
+1. `quant_only`
+2. `factor_composite`
+3. `ai_wf_topk`
+4. `combo_overlay_replace`
+5. `factor_composite_ai_filter`
+6. `factor_composite_ai_overlay`
+7. `factor_composite_ai_limited_replace`
+
+## Common-Period Comparison
+
+The repository now records both:
+
+- full-period comparison
+- common-period comparison
+
+Why this matters:
+
+- some experimental AI strategies do not cover the same effective evaluation range as `factor_composite`
+- a common-period slice is therefore recomputed using:
+  - `common_eval_start_month = max(eval_start_month across strategies)`
+  - `common_eval_end_month = min(eval_end_month across strategies)`
+
+The output comparison file contains:
+
+- original full-period metrics
+- evaluation metadata such as `eval_months` and `eval_periods`
+- common-period metrics:
+  - `net_nav_common`
+  - `cagr_common`
+  - `sharpe_common`
+  - `mdd_common`
+
 ## Live Factor Composite Pipeline
 
 The dedicated wrapper for the current main live strategy candidate is:
@@ -167,6 +209,7 @@ Guide:
 Reproduction record for the current provisional build:
 
 - [docs/reproduce_2026_04_15.md](docs/reproduce_2026_04_15.md)
+- [docs/strategy_compare_2026_04_15.md](docs/strategy_compare_2026_04_15.md)
 
 ## Provisional / Fallback Warning
 
@@ -210,5 +253,9 @@ Exclude:
 ## Current Main Recommendation
 
 - Keep `factor_composite` as the main live strategy candidate.
-- Keep `ai_wf_topk` as a satellite or bounded overlay candidate.
+- Treat AI-led or AI-assisted variants as `experimental`.
+- Keep `ai_wf_topk` as a satellite or bounded overlay candidate, not the main selector.
 - Keep `combo_overlay_replace` as an experimental blended strategy, not the default main strategy.
+- For the `2026-04-15` provisional comparison:
+  - `full-period winner = factor_composite`
+  - `common-period winner = factor_composite`
