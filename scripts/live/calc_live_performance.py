@@ -73,6 +73,61 @@ def load_execution_plan(path: str | Path) -> pd.DataFrame:
     return df
 
 
+def load_holdings_csv(path: str | Path) -> pd.DataFrame:
+    """Load an actual holdings snapshot with ticker/name/shares columns.
+
+    This is intentionally separate from execution_plan mode.  A holdings snapshot
+    represents what was actually held at the start of the performance window,
+    so it avoids look-ahead bias during sandbox/smoke-test report generation.
+    """
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(f"holdings_csv not found: {p}")
+
+    df = pd.read_csv(p, dtype={"ticker": str}, encoding="utf-8-sig")
+    if "ticker" not in df.columns:
+        raise ValueError("holdings_csv must contain 'ticker'")
+    if "shares" not in df.columns:
+        raise ValueError("holdings_csv must contain 'shares'")
+
+    out = df.copy()
+    out["ticker"] = normalize_ticker(out["ticker"])
+    out["shares"] = pd.to_numeric(out["shares"], errors="coerce").fillna(0)
+    out = out[out["shares"] > 0].copy()
+
+    if "name" not in out.columns:
+        out["name"] = pd.NA
+
+    out = (
+        out.groupby(["ticker", "name"], dropna=False, as_index=False)["shares"]
+        .sum()
+        .sort_values("ticker")
+        .reset_index(drop=True)
+    )
+    return out
+
+
+def build_positions_from_holdings(holdings_df: pd.DataFrame, base_px: pd.DataFrame) -> pd.DataFrame:
+    df = holdings_df.merge(base_px, on="ticker", how="left")
+    if df["base_price"].isna().any():
+        missing = df.loc[df["base_price"].isna(), ["ticker", "name", "shares"]]
+        raise ValueError("base_price missing for holdings rows:\n" + missing.to_string(index=False))
+
+    df["post_trade_shares"] = pd.to_numeric(df["shares"], errors="coerce").fillna(0)
+    df["base_value"] = df["post_trade_shares"] * df["base_price"]
+    df["name_final"] = df.get("name", pd.NA)
+    df["action"] = "ACTUAL_HOLDING"
+    df["reason"] = "actual holdings snapshot"
+    df["order_side"] = "HOLDING"
+
+    keep_cols = [
+        "ticker", "name_final", "action", "reason", "order_side",
+        "shares", "post_trade_shares", "base_date", "base_price", "base_value",
+    ]
+    keep_cols = [c for c in keep_cols if c in df.columns]
+    return df[keep_cols].copy()
+
+
 def load_prices_daily(path: str | Path, price_date: Optional[str] = None) -> pd.DataFrame:
     p = Path(path)
     if not p.exists():
@@ -153,6 +208,7 @@ def calc_portfolio_timeseries(
     total_capital: float,
     start_date: str,
     end_date: Optional[str] = None,
+    capital_mode: str = "total",
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict]:
     pos = positions[["ticker", "post_trade_shares", "base_price", "base_value"]].copy()
     pos = pos[pos["post_trade_shares"] > 0].copy()
@@ -161,7 +217,14 @@ def calc_portfolio_timeseries(
         raise ValueError("No positive post-trade holdings found")
 
     invested_base = float(pos["base_value"].sum())
-    cash = float(total_capital - invested_base)
+    if capital_mode == "invested":
+        initial_nav = invested_base
+        cash = 0.0
+    elif capital_mode == "total":
+        initial_nav = float(total_capital)
+        cash = float(total_capital - invested_base)
+    else:
+        raise ValueError(f"unsupported capital_mode: {capital_mode}")
 
     px = prices.merge(pos[["ticker", "post_trade_shares", "base_price", "base_value"]], on="ticker", how="inner")
     px = px[px["date"] >= pd.to_datetime(start_date)].copy()
@@ -183,18 +246,28 @@ def calc_portfolio_timeseries(
     daily["cash"] = cash
     daily["nav"] = daily["portfolio_value_ex_cash"] + daily["cash"]
 
-    initial_nav = float(total_capital)
+    if initial_nav <= 0:
+        raise ValueError(f"initial_nav must be positive: {initial_nav}")
     daily["cum_return"] = daily["nav"] / initial_nav - 1.0
     daily["daily_return"] = daily["nav"].pct_change().fillna(daily["cum_return"])
+    daily["prior_peak_nav"] = pd.to_numeric(daily["nav"], errors="coerce").cummax()
+    daily["drawdown"] = daily["nav"] / daily["prior_peak_nav"] - 1.0
+    peak_dates = daily["date"].where(pd.to_numeric(daily["nav"], errors="coerce").eq(daily["prior_peak_nav"]))
+    daily["drawdown_peak_date"] = peak_dates.ffill()
 
     last_date = daily["date"].max()
     last_px = px[px["date"] == last_date].copy()
     contrib = last_px.copy()
     contrib["pnl"] = contrib["position_value"] - contrib["base_value"]
+    denom = contrib["base_value"].replace(0.0, np.nan)
+    contrib["position_period_return"] = contrib["pnl"] / denom
     contrib["contribution_to_total_return"] = contrib["pnl"] / initial_nav
     last_nav = float(daily.loc[daily["date"] == last_date, "nav"].iloc[0])
     contrib["weight_at_last_nav"] = contrib["position_value"] / last_nav
     contrib = contrib.sort_values("contribution_to_total_return", ascending=False)
+    dd_idx = daily["drawdown"].astype(float).idxmin()
+    dd_peak_date = daily.loc[dd_idx, "drawdown_peak_date"] if dd_idx in daily.index else pd.NaT
+    peak_nav = float(pd.to_numeric(daily["prior_peak_nav"], errors="coerce").max())
 
     summary = {
         "start_date": str(pd.to_datetime(start_date).date()),
@@ -204,6 +277,9 @@ def calc_portfolio_timeseries(
         "cash_after_rebalance": cash,
         "last_nav": last_nav,
         "cum_return": float(daily["cum_return"].iloc[-1]),
+        "peak_nav": peak_nav,
+        "max_drawdown": float(pd.to_numeric(daily["drawdown"], errors="coerce").min()),
+        "drawdown_peak_date": str(pd.to_datetime(dd_peak_date).date()) if pd.notna(dd_peak_date) else None,
         "num_positions": int(len(pos)),
     }
     return daily, contrib, summary
@@ -236,18 +312,22 @@ def maybe_load_benchmark(path: Optional[str], start_date: str, end_date: str) ->
     if out.empty:
         return None
     base = float(out["benchmark_price"].iloc[0])
+    out["benchmark_daily_return"] = out["benchmark_price"].pct_change().fillna(0.0)
     out["benchmark_cum_return"] = out["benchmark_price"] / base - 1.0
     return out
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--execution_plan", required=True)
+    ap.add_argument("--execution_plan", default=None, help="execution plan csv; mutually exclusive with --holdings_csv")
+    ap.add_argument("--holdings_csv", default=None, help="actual holdings snapshot csv with ticker/name/shares")
     ap.add_argument("--prices_daily", required=True)
     ap.add_argument("--total_capital", required=True, type=float)
-    ap.add_argument("--target_date", required=True, help="rebalance target date, e.g. 2026-03-31")
+    ap.add_argument("--capital_mode", choices=["total", "invested"], default="total", help="total: include cash from total_capital; invested: evaluate invested holdings only")
+    ap.add_argument("--target_date", required=True, help="performance start / rebalance date, e.g. 2026-03-31")
     ap.add_argument("--end_date", default=None, help="performance end date; default = latest available")
     ap.add_argument("--benchmark", default=None, help="optional benchmark csv/parquet with date+price")
+    ap.add_argument("--benchmark_name", default=None, help="optional benchmark display name, e.g. KOSDAQ150")
     ap.add_argument("--output_dir", required=True)
     ap.add_argument("--tag", default=None, help="optional tag for output filenames")
     args = ap.parse_args()
@@ -260,11 +340,22 @@ def main() -> None:
 
     tag = args.tag or f"target={args.target_date}"
 
-    exec_df = load_execution_plan(args.execution_plan)
-    prices = load_prices_daily(args.prices_daily)
+    if bool(args.execution_plan) == bool(args.holdings_csv):
+        raise ValueError("Provide exactly one of --execution_plan or --holdings_csv")
 
+    prices = load_prices_daily(args.prices_daily)
     base_px = latest_price_on_or_before(prices, args.target_date)
-    positions = build_post_rebalance_positions(exec_df, base_px)
+
+    if args.holdings_csv:
+        holdings_df = load_holdings_csv(args.holdings_csv)
+        positions = build_positions_from_holdings(holdings_df, base_px)
+        source_type = "holdings_csv"
+        source_path = args.holdings_csv
+    else:
+        exec_df = load_execution_plan(args.execution_plan)
+        positions = build_post_rebalance_positions(exec_df, base_px)
+        source_type = "execution_plan"
+        source_path = args.execution_plan
 
     daily, contrib, summary = calc_portfolio_timeseries(
         positions=positions,
@@ -272,15 +363,22 @@ def main() -> None:
         total_capital=args.total_capital,
         start_date=args.target_date,
         end_date=args.end_date,
+        capital_mode=args.capital_mode,
     )
+    summary["source_type"] = source_type
+    summary["source_path"] = str(source_path)
+    summary["capital_mode"] = args.capital_mode
 
     bm = maybe_load_benchmark(args.benchmark, summary["start_date"], summary["end_date"])
     if bm is not None:
-        daily = daily.merge(bm[["date", "benchmark_cum_return"]], on="date", how="left")
+        bm_cols = [c for c in ["date", "benchmark_daily_return", "benchmark_cum_return"] if c in bm.columns]
+        daily = daily.merge(bm[bm_cols], on="date", how="left")
         if pd.notna(daily["benchmark_cum_return"]).any():
             last_bm = daily["benchmark_cum_return"].dropna().iloc[-1]
             summary["benchmark_cum_return"] = float(last_bm)
             summary["active_return"] = float(summary["cum_return"] - last_bm)
+        if args.benchmark_name:
+            summary["benchmark_name"] = str(args.benchmark_name)
 
     positions_path = out_dir / f"live_positions__{tag}.csv"
     daily_path = out_dir / f"live_performance_daily__{tag}.csv"

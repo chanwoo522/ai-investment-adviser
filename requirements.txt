@@ -1,0 +1,11 @@
+pandas==2.3.3
+numpy==1.26.4
+pyarrow==23.0.1
+PyYAML==6.0.3
+scikit-learn==1.8.0
+joblib==1.5.3
+requests==2.32.5
+urllib3==2.6.3
+OpenDartReader==0.2.3
+pykrx==1.2.4
+matplotlib==3.10.8

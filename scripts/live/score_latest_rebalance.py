@@ -29,7 +29,6 @@ import pandas as pd
 
 from common.portfolio_modules import (
     load_strategy_modules_config,
-    apply_expectation_overlay,
     apply_quality_soft_penalty,
     select_target_portfolio_with_mcap_groups,
 )
@@ -85,6 +84,24 @@ DEFAULT_BUCKET_SPECS: dict[str, list[str]] = {
 }
 
 RAW_FACTOR_DEFAULTS = {"op_growth_streak2", "rev_growth_streak2"}
+
+
+def load_krx_master_meta(asof: str, master_src: str = "pykrx", master_v: int = 1) -> dict[str, Any]:
+    candidates = [
+        Path(f"data/processed/krx_master__asof={asof}__src={master_src}__v={master_v}.meta.json"),
+        Path(f"data/interim/marketdata/krx_master__asof={asof}__src={master_src}__v={master_v}.meta.json"),
+    ]
+    for p in candidates:
+        if not p.exists():
+            continue
+        try:
+            obj = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(obj, dict):
+            obj["_meta_path"] = str(p)
+            return obj
+    return {}
 
 
 # --------------------------------------------------------------------------------------
@@ -924,7 +941,6 @@ def make_scores_full_universe(
     ai_cap_profit_accel_delta: float | None = None,
     ai_overlay_strength: float = 1.0,
     price_history: pd.DataFrame | None = None,
-    expectation_cfg: dict[str, Any] | None = None,
     quality_penalty_cfg: dict[str, Any] | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any] | None]:
     full = g.copy()
@@ -1051,13 +1067,6 @@ def make_scores_full_universe(
             gg[f"{c}__contrib"] = gg[f"{c}__contrib_base"]
             gg[f"{c}__ai_mult"] = 1.0
         gg["ai_overlay_active"] = 0
-
-    gg = apply_expectation_overlay(
-        gg,
-        expectation_cfg,
-        asof_date=target_dt,
-        price_history=price_history,
-    )
     gg = apply_quality_soft_penalty(
         gg,
         quality_penalty_cfg,
@@ -1096,15 +1105,6 @@ def make_scores_full_universe(
             keep.append(c)
 
     for c in [
-        "expectation_overlay_active",
-        "expectation_component_count",
-        "expectation_valuation_z",
-        "expectation_mom6_z",
-        "expectation_mom12_z",
-        "expectation_score",
-        "expectation_penalty",
-        "score_total_pre_expect",
-        "score_total_post_expect",
         "quality_soft_penalty_active",
         "quality_penalty_netincome_ttm_nonpositive",
         "quality_penalty_netincome_acc2_negative",
@@ -1205,7 +1205,6 @@ def main():
         print(f"[INFO] strategy desc: {desc}")
 
     modules_cfg = load_strategy_modules_config(strat_path, args.strategy)
-    expectation_cfg = modules_cfg.get("expectation_overlay", {})
     quality_penalty_cfg = modules_cfg.get("quality_soft_penalty", {})
     mcap_grouping_cfg = modules_cfg.get("mcap_grouping", {})
 
@@ -1266,7 +1265,6 @@ def main():
         ai_cap_profit_accel_delta=None if float(args.ai_cap_profit_accel_delta) < 0 else float(args.ai_cap_profit_accel_delta),
         ai_overlay_strength=float(args.ai_overlay_strength),
         price_history=price_hist,
-        expectation_cfg=expectation_cfg,
         quality_penalty_cfg=quality_penalty_cfg,
     )
 
@@ -1331,10 +1329,21 @@ def main():
         "ai_temperature": float(args.ai_temperature),
         "ai_cap_profit_accel_delta": None if float(args.ai_cap_profit_accel_delta) < 0 else float(args.ai_cap_profit_accel_delta),
         "ai_overlay_strength": float(args.ai_overlay_strength),
-        "expectation_overlay": expectation_cfg,
         "quality_soft_penalty": quality_penalty_cfg,
         "mcap_grouping": mcap_grouping_cfg,
     }
+    krx_meta = load_krx_master_meta(args.asof)
+    if krx_meta:
+        coverage["krx_master_meta_path"] = krx_meta.get("_meta_path")
+        coverage["provisional"] = bool(krx_meta.get("provisional", False))
+        coverage["provisional_source"] = krx_meta.get("source")
+        coverage["krx_master_collection_status"] = krx_meta.get("collection_status")
+    if args.strategy == "factor_composite":
+        coverage["strategy_alias_of"] = "D_quality_filter_debt_profitaccel_liq"
+        coverage["strategy_operating_note"] = (
+            "factor_composite is the live-operation alias for the existing "
+            "D_quality_filter_debt_profitaccel_liq composite factor strategy."
+        )
     if ai_overlay_info is not None:
         coverage["ai_pred_alpha"] = ai_overlay_info["pred_alpha"]
         coverage["ai_base_share"] = ai_overlay_info["base_share"]
@@ -1358,7 +1367,7 @@ def main():
     show_top = [c for c in [
         "ticker", "name", "score_base", "score", "score_adj", "hold_bonus_applied", "score_rank", "score_adj_rank",
         "selection_bucket", group_col, "mcap_group", "mcap_rank_pct", "mcap_group_selection_reason",
-        "ai_overlay_active", "expectation_overlay_active", "expectation_score", "expectation_penalty",
+        "ai_overlay_active",
         "quality_soft_penalty_active", "quality_penalty_total",
         "ai_pred_alpha__profit_accel", "ai_pred_alpha__revenue_support", "ai_pred_alpha__balance_sheet",
         "ai_bucket_mult__profit_accel", "ai_bucket_mult__revenue_support", "ai_bucket_mult__balance_sheet",
@@ -1444,7 +1453,6 @@ def main():
         "cohort_status", "score_availability_reason", "filter_status", "passed_filters", "selected_topk", "in_target_topk",
         "latest_available_rebalance_month", "latest_available_year", "latest_available_quarter",
         "score_base", "score", "score_rank", group_col, "mcap_group", "mcap_rank_pct",
-        "expectation_overlay_active", "expectation_score", "expectation_penalty",
         "quality_soft_penalty_active", "quality_penalty_total",
         "ai_pred_alpha__profit_accel", "ai_pred_alpha__revenue_support", "ai_pred_alpha__balance_sheet",
         "ai_bucket_mult__profit_accel", "ai_bucket_mult__revenue_support", "ai_bucket_mult__balance_sheet",

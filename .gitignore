@@ -10,6 +10,7 @@ docs_cache/
 
 # Logs
 logs/
+artifacts/logs/
 *.log
 run_log.txt
 
@@ -21,6 +22,9 @@ ai_inv_adv.zip
 *.zip
 
 # Data outputs / raw data
+data/
+artifacts/
+logs/
 data/raw/
 data/processed/
 data/live/
@@ -31,6 +35,8 @@ data/factor_weight_ml/
 data/ai_filter/
 data_inventory_*/
 *.parquet
+*.csv
+.env
 
 # Local generated helper files
 staged.txt
@@ -51,3 +57,7 @@ Thumbs.db
 
 # Optional: feature metadata outputs
 data/features/features_live/*.meta.json
+
+# Keep small explicit examples only if intentionally added later
+!samples/
+!examples/

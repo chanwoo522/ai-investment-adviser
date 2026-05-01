@@ -218,3 +218,62 @@ strategies:
       keep_current_top_n: 3
       mcap_grouping:
         enabled: false
+  factor_composite:
+    desc: factor_composite live alias for D_quality_filter_debt_profitaccel_liq; quant base score + quality soft penalty + holding bonus operational main strategy
+    weights:
+      OpIncome_acc2_log1p: 1.0
+      Revenue_acc2: 0.25
+      Debt_to_Equity_log: -0.35
+      op_growth_streak2: 0.15
+      rev_growth_streak2: 0.05
+    filters:
+      max_Debt_to_Equity_log: 2.398
+      min_traded_value: 1000000000
+      min_mcap: 100000000000
+      min_OpIncome_ttm: 0
+      min_op_cur_q: 0
+    scoring:
+      method: zscore
+      clip_z: 4.0
+      clip_tiers:
+      - upto: 1.0
+        slope: 1.0
+      - upto: 2.0
+        slope: 0.8
+      - upto: 3.0
+        slope: 0.6
+      - upto: 4.0
+        slope: 0.4
+      hold_bonus: 0.5
+      use_robust_z: true
+      raw_factors:
+      - op_growth_streak2
+      - rev_growth_streak2
+      quality_soft_penalty:
+        enabled: true
+        netincome_ttm_nonpositive_penalty: -0.25
+        netincome_acc2_negative_penalty: -0.15
+        cfo_warn_penalty: -0.15
+        cfo_isnull_penalty: -0.1
+      expectation_overlay:
+        enabled: false
+      ai_weighting:
+        enabled: false
+        report_enabled: true
+        model_name: factor_weight_adjuster_v1
+        apply_mode: smoke_test
+        active_for_selection: false
+        input_factors:
+        - OpIncome_acc2_log1p
+        - Revenue_acc2
+        - Debt_to_Equity_log
+        - op_growth_streak2
+        - rev_growth_streak2
+        output: factor weight dynamic adjuster alpha_i
+        smoke_test: true
+        reference_only: true
+    selection:
+      portfolio_size: 10
+      keep_current_top_n: 3
+      mcap_grouping:
+        enabled: false

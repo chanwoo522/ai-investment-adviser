@@ -1,4 +1,4 @@
-
+﻿
 from __future__ import annotations
 
 # ---- path bootstrap ----
@@ -13,6 +13,7 @@ for _p in (REPO_ROOT, SCRIPTS_DIR):
 # ------------------------
 
 import argparse
+import json
 from pathlib import Path
 from typing import Iterable
 import html
@@ -98,6 +99,81 @@ def safe_num(x):
         return float(x)
     except Exception:
         return None
+
+
+def load_best_strategy_summary(asof: str) -> dict | None:
+    p = Path(f"artifacts/strategy_compare/asof={asof}/best_strategy.json")
+    if not p.exists():
+        return None
+    try:
+        import json
+        obj = json.loads(p.read_text(encoding="utf-8"))
+        return obj if isinstance(obj, dict) else None
+    except Exception:
+        return None
+
+
+def build_best_strategy_note_html(asof: str) -> str:
+    info = load_best_strategy_summary(asof)
+    if not info:
+        return ""
+    strategy_variant = html.escape(str(info.get("strategy_variant", "-")))
+    provisional = bool(info.get("provisional", False))
+    provisional_source = html.escape(str(info.get("provisional_source", "-")))
+    rerun_required = bool(info.get("rerun_required_when_primary_collection_recovers", False))
+    items = [
+        f"<li><strong>선택 전략:</strong> {strategy_variant}</li>",
+        f"<li><strong>Provisional:</strong> {'Yes' if provisional else 'No'}</li>",
+    ]
+    if provisional:
+        items.append(f"<li><strong>Provisional source:</strong> {provisional_source}</li>")
+    if rerun_required:
+        items.append("<li><strong>재실행 필요:</strong> KRX 2026-04-15 master 정상 수집 후 비교 재실행 권장</li>")
+    return f"""<div class="note"><strong>전략 비교 요약</strong><ul>{''.join(items)}</ul></div>"""
+
+
+def build_best_strategy_note_markdown(asof: str) -> list[str]:
+    info = load_best_strategy_summary(asof)
+    if not info:
+        return []
+    lines = ["### 전략 비교 요약", ""]
+    lines.append(f"- 선택 전략: **{info.get('strategy_variant', '-')}**")
+    provisional = bool(info.get("provisional", False))
+    lines.append(f"- Provisional: **{'Yes' if provisional else 'No'}**")
+    if provisional:
+        lines.append(f"- Provisional source: **{info.get('provisional_source', '-')}**")
+    if bool(info.get("rerun_required_when_primary_collection_recovers", False)):
+        lines.append("- 재실행 필요: **KRX 2026-04-15 master 정상 수집 후 비교 재실행 권장**")
+    lines.append("")
+    return lines
+
+
+def load_krx_master_provisional_meta(asof: str, master_src: str = "pykrx", master_v: int = 1) -> dict | None:
+    candidates = [
+        Path(f"data/processed/krx_master__asof={asof}__src={master_src}__v={master_v}.meta.json"),
+        Path(f"data/interim/marketdata/krx_master__asof={asof}__src={master_src}__v={master_v}.meta.json"),
+    ]
+    for p in candidates:
+        if not p.exists():
+            continue
+        try:
+            obj = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(obj, dict):
+            obj["_meta_path"] = str(p)
+            return obj
+    return None
+
+
+def build_strategy_alias_note(strategy: str) -> list[str]:
+    if strategy != "factor_composite":
+        return []
+    return [
+        "- factor_composite는 **실전 운용용 alias**이며, 기존 `D_quality_filter_debt_profitaccel_liq` 기능은 보존됩니다.",
+        "- 공통 기반은 **순수 퀀트 기본 점수(score_base)** 이고, 실전 운용에서는 **quality soft penalty**와 **holding bonus**를 함께 반영합니다.",
+        "- 현재 설정 기준 AI weighting/overlay는 **리포트 표시용 비활성 상태**이며, 최종 편입 점수에는 직접 반영되지 않습니다.",
+    ]
 
 
 def fmt_num(x, digits: int = 0) -> str:
@@ -371,19 +447,16 @@ def enforce_industry_name_from_code(detail: pd.DataFrame, reference_csv: str | P
     if "report_industry_name" not in out.columns:
         out["report_industry_name"] = pd.NA
 
-    # ?? C: ?? ??? ???? industry_code ???? ??
     out["report_industry_name"] = coalesce_prefer(
         mapped_name,
         out["report_industry_name"],
         stringy=True,
     )
 
-    # summary/detail?? ?? ?? industry_name? ???? ??
     out["industry_name"] = out["report_industry_name"]
     out["industry4"] = out["industry_code"]
 
     return out
-
 
 def extract_tag(path_like, tag: str):
     from pathlib import Path
@@ -445,17 +518,25 @@ def auto_detect_scores_csv(
     feat_v = parse_feat_v_from_features_path(features_live)
     if feat_v is None or not metric:
         return None
+
+    filename = (
+        f"latest_scores__asof={asof}__metric={metric}"
+        f"__strat={strategy}__featv={feat_v}__target={target_date}__full_universe.csv"
+    )
     candidates = [
-        Path(
-            f"data/live/scores/latest_scores__asof={asof}__metric={metric}"
-            f"__strat={strategy}__featv={feat_v}__target={target_date}__full_universe.csv"
-        ),
-        Path(
-            f"data/processed/latest_scores__asof={asof}__metric={metric}"
-            f"__strat={strategy}__featv={feat_v}__target={target_date}__full_universe.csv"
-        ),
+        Path("data/live/scores") / filename,
+        Path("data/processed") / filename,
+        Path("data/scores") / filename,
     ]
+    candidates.extend(sorted(Path("data").glob(f"**/scores/{filename}")))
+    candidates.extend(sorted(Path("data").glob(f"**/{filename}")))
+
+    seen: set[str] = set()
     for p in candidates:
+        key = str(p.resolve()) if p.exists() else str(p)
+        if key in seen:
+            continue
+        seen.add(key)
         if p.exists():
             return p
     return None
@@ -473,6 +554,9 @@ def merge_exact_scores(detail: pd.DataFrame, scores_csv: str | Path) -> pd.DataF
         ("score", "score"),
         ("score_adj", "score_adj"),
         ("score_base", "score_base"),
+        ("score_total_base", "score_total_base"),
+        ("score_total", "score_total"),
+        ("ai_overlay_active", "ai_overlay_active"),
         ("hold_bonus_applied", "hold_bonus_applied"),
         ("score_rank", "score_rank"),
         ("score_adj_rank", "score_adj_rank"),
@@ -486,9 +570,6 @@ def merge_exact_scores(detail: pd.DataFrame, scores_csv: str | Path) -> pd.DataF
         ("kept_from_previous", "kept_from_previous"),
         ("mcap_group", "mcap_group"),
         ("mcap_rank_pct", "mcap_rank_pct"),
-        ("expectation_overlay_active", "expectation_overlay_active"),
-        ("expectation_score", "expectation_score"),
-        ("expectation_penalty", "expectation_penalty"),
         ("quality_soft_penalty_active", "quality_soft_penalty_active"),
         ("quality_penalty_total", "quality_penalty_total"),
         ("quality_penalty_netincome_ttm_nonpositive", "quality_penalty_netincome_ttm_nonpositive"),
@@ -500,11 +581,23 @@ def merge_exact_scores(detail: pd.DataFrame, scores_csv: str | Path) -> pd.DataF
     alias_map = {
         "OpIncome_acc2__contrib": "contrib_op",
         "OpIncome_acc2_log1p__contrib": "contrib_op_log",
+        "OpIncome_acc2_log1p__contrib_base": "contrib_op_log_base",
+        "OpIncome_acc2_log1p__ai_mult": "ai_mult_profit_accel",
         "op_growth_streak2__contrib": "contrib_op_streak",
+        "op_growth_streak2__contrib_base": "contrib_op_streak_base",
+        "op_growth_streak2__ai_mult": "ai_mult_op_streak",
         "Revenue_acc2__contrib": "contrib_rev",
+        "Revenue_acc2__contrib_base": "contrib_rev_base",
+        "Revenue_acc2__ai_mult": "ai_mult_revenue_support",
         "Revenue_acc2_log1p__contrib": "contrib_rev_log",
+        "Revenue_acc2_log1p__contrib_base": "contrib_rev_log_base",
+        "Revenue_acc2_log1p__ai_mult": "ai_mult_revenue_log",
         "rev_growth_streak2__contrib": "contrib_rev_streak",
+        "rev_growth_streak2__contrib_base": "contrib_rev_streak_base",
+        "rev_growth_streak2__ai_mult": "ai_mult_rev_streak",
         "Debt_to_Equity_log__contrib": "contrib_debt",
+        "Debt_to_Equity_log__contrib_base": "contrib_debt_base",
+        "Debt_to_Equity_log__ai_mult": "ai_mult_balance_sheet",
         "Quality_CFO_to_Assets__contrib": "contrib_cfo",
         "CFO_isnull__contrib": "contrib_missing",
         "OpIncome_acc2__raw": "op_acc2",
@@ -518,10 +611,11 @@ def merge_exact_scores(detail: pd.DataFrame, scores_csv: str | Path) -> pd.DataF
         "CFO_isnull__raw": "cfo_isnull",
     }
     present_alias_src = [c for c in alias_map.keys() if c in sc.columns]
+    exact_mapped_cols = [alias_map[c] for c in present_alias_src]
     contrib_cols = [alias_map[c] for c in present_alias_src if c.endswith("__contrib")]
     raw_cols = [alias_map[c] for c in present_alias_src if c.endswith("__raw")]
     sc = sc.rename(columns={c: alias_map[c] for c in present_alias_src})
-    keep_cols = ["ticker"] + [r for _, r in fill_pairs if r in sc.columns] + contrib_cols + raw_cols
+    keep_cols = ["ticker"] + [r for _, r in fill_pairs if r in sc.columns] + exact_mapped_cols
     keep_cols = list(dict.fromkeys([c for c in keep_cols if c in sc.columns]))
 
     sc_small = sc[keep_cols].copy()
@@ -567,8 +661,8 @@ def merge_exact_scores(detail: pd.DataFrame, scores_csv: str | Path) -> pd.DataF
         else:
             out[left] = coalesce_prefer(rser, lser, stringy=False)
 
-    # contrib / raw 컬럼도 exact source 우선 반영
-    for c in contrib_cols + raw_cols:
+    # contrib / raw / AI multiplier 컬럼도 exact source 우선 반영
+    for c in exact_mapped_cols:
         ce = f"{c}__exact"
         if ce not in out.columns:
             continue
@@ -582,6 +676,16 @@ def merge_exact_scores(detail: pd.DataFrame, scores_csv: str | Path) -> pd.DataF
     drop_cols = [c for c in out.columns if c.endswith("__exact")]
     out = out.drop(columns=drop_cols, errors="ignore")
     out = _dedupe_columns_keep_first(out)
+
+    # Convenience score aliases for report readability.
+    # score_base/score_total_base: before AI bucket overlay.
+    # score/score_total: after AI bucket overlay and any quality penalty.
+    if "score_total_base" in out.columns and "score_base" not in out.columns:
+        out["score_base"] = out["score_total_base"]
+    if "score_total" in out.columns and "score_ai" not in out.columns:
+        out["score_ai"] = out["score_total"]
+    elif "score" in out.columns and "score_ai" not in out.columns:
+        out["score_ai"] = out["score"]
 
     return out
 
@@ -793,16 +897,89 @@ def _quarter_flow_from_cum(df: pd.DataFrame, value_col: str) -> pd.Series:
     return vals.where(qn.eq(1), vals - prev)
 
 
+
+def _period_label_series(df: pd.DataFrame) -> pd.Series:
+    """Return labels like 2025Q4 for rows with year/quarter."""
+    year = pd.to_numeric(df.get("year"), errors="coerce").astype("Int64").astype("string")
+    qn = _quarter_num(df.get("quarter")).astype("Int64").astype("string")
+    return year.fillna("") + "Q" + qn.fillna("")
+
+
+def _add_last3_trend_columns(df: pd.DataFrame, *, revenue_col: str | None, op_col: str | None) -> pd.DataFrame:
+    """
+    Add latest 3 single-quarter trend columns per ticker.
+
+    Columns:
+      - period_q2 / period_q1 / period_q0
+      - revenue_q2 / revenue_q1 / revenue_q0
+      - op_q2 / op_q1 / op_q0
+
+    q2 = two quarters before latest, q1 = previous quarter, q0 = latest quarter.
+    """
+    if df is None or len(df) == 0 or "ticker" not in df.columns:
+        return df
+
+    out = df.copy()
+    if "year" not in out.columns or "quarter" not in out.columns:
+        return out
+
+    out["ticker"] = normalize_ticker(out["ticker"])
+    out["year"] = pd.to_numeric(out["year"], errors="coerce")
+    out["quarter_num"] = _quarter_num(out["quarter"])
+    out = out.dropna(subset=["ticker", "year", "quarter_num"]).sort_values(["ticker", "year", "quarter_num"]).copy()
+    out["_period_label"] = _period_label_series(out)
+
+    # Prefer already-derived single-quarter fields where available.
+    if revenue_col and revenue_col in out.columns:
+        out["_rev_trend_value"] = pd.to_numeric(out[revenue_col], errors="coerce")
+    elif "Revenue" in out.columns:
+        out["_rev_trend_value"] = pd.to_numeric(out["Revenue"], errors="coerce")
+    else:
+        out["_rev_trend_value"] = pd.NA
+
+    if op_col and op_col in out.columns:
+        out["_op_trend_value"] = pd.to_numeric(out[op_col], errors="coerce")
+    elif "OpIncome" in out.columns:
+        out["_op_trend_value"] = pd.to_numeric(out["OpIncome"], errors="coerce")
+    else:
+        out["_op_trend_value"] = pd.NA
+
+    for prefix, base_col in [("revenue", "_rev_trend_value"), ("op", "_op_trend_value")]:
+        out[f"{prefix}_q0"] = out[base_col]
+        out[f"{prefix}_q1"] = out.groupby("ticker")[base_col].shift(1)
+        out[f"{prefix}_q2"] = out.groupby("ticker")[base_col].shift(2)
+
+    out["period_q0"] = out["_period_label"]
+    out["period_q1"] = out.groupby("ticker")["_period_label"].shift(1)
+    out["period_q2"] = out.groupby("ticker")["_period_label"].shift(2)
+
+    return out
+
 def build_quarter_snapshot(raw: pd.DataFrame) -> pd.DataFrame | None:
     cols = raw.columns.tolist()
     if "ticker" not in cols:
         return None
 
     direct_cols = ["revenue_prev_q", "revenue_cur_q", "revenue_qoq", "op_prev_q", "op_cur_q", "op_qoq"]
+    trend_cols = [
+        "period_q2", "period_q1", "period_q0",
+        "revenue_q2", "revenue_q1", "revenue_q0",
+        "op_q2", "op_q1", "op_q0",
+    ]
+
+    # If quarter snapshot columns already exist, preserve them and still build last-3 trend from *_cur_q.
     if any(c in cols for c in direct_cols):
-        keep = [c for c in ["ticker", "year", "quarter", *direct_cols] if c in cols]
-        df = raw[keep].copy()
+        keep_base = [c for c in ["ticker", "year", "quarter", *direct_cols] if c in cols]
+        df = raw[keep_base].copy()
         df["ticker"] = normalize_ticker(df["ticker"])
+        if "year" in df.columns and "quarter" in df.columns:
+            df = _add_last3_trend_columns(
+                df,
+                revenue_col="revenue_cur_q" if "revenue_cur_q" in df.columns else None,
+                op_col="op_cur_q" if "op_cur_q" in df.columns else None,
+            )
+            keep = [c for c in ["ticker", "year", "quarter", *direct_cols, *trend_cols] if c in df.columns]
+            return df[keep].drop_duplicates("ticker", keep="last").copy()
         return dedup_features_latest(df)
 
     year_col = pick_first(cols, ["year"])
@@ -840,8 +1017,14 @@ def build_quarter_snapshot(raw: pd.DataFrame) -> pd.DataFrame | None:
     if op_col is not None:
         _derive_from_value(op_col, "op")
 
+    df = _add_last3_trend_columns(
+        df,
+        revenue_col="revenue_cur_q" if "revenue_cur_q" in df.columns else None,
+        op_col="op_cur_q" if "op_cur_q" in df.columns else None,
+    )
+
     keep = ["ticker", "year", "quarter"]
-    for c in ["revenue_prev_q", "revenue_cur_q", "revenue_qoq", "op_prev_q", "op_cur_q", "op_qoq"]:
+    for c in ["revenue_prev_q", "revenue_cur_q", "revenue_qoq", "op_prev_q", "op_cur_q", "op_qoq", *trend_cols]:
         if c in df.columns:
             keep.append(c)
     return df[keep].drop_duplicates("ticker", keep="last").copy()
@@ -854,10 +1037,12 @@ def build_detail(actions: pd.DataFrame, feat: pd.DataFrame, target_period_map: p
     feat_base = align_to_target_period(feat, target_period_map)
     feat_small = reduce_to_mapped(feat_base)
     df = actions.merge(feat_small, on="ticker", how="left")
-    qsnap = build_quarter_snapshot(feat_base)
+    # Trend columns must be built from full feature history.
+    # Building after align_to_target_period() removes q2/q1 and shows '-' in the report.
+    qsnap = build_quarter_snapshot(feat)
     if qsnap is not None:
         df = df.merge(qsnap, on="ticker", how="left", suffixes=("", "__featq"))
-        for c in ["year", "quarter", "revenue_prev_q", "revenue_cur_q", "revenue_qoq", "op_prev_q", "op_cur_q", "op_qoq"]:
+        for c in ["year", "quarter", "period_q2", "period_q1", "period_q0", "revenue_q2", "revenue_q1", "revenue_q0", "op_q2", "op_q1", "op_q0", "revenue_prev_q", "revenue_cur_q", "revenue_qoq", "op_prev_q", "op_cur_q", "op_qoq"]:
             rc = f"{c}__featq"
             if rc in df.columns:
                 if c in df.columns:
@@ -880,7 +1065,7 @@ def build_detail(actions: pd.DataFrame, feat: pd.DataFrame, target_period_map: p
     df["report_price"] = df["price"] if "price" in df.columns else pd.NA
     df["report_mcap"] = df["mcap"] if "mcap" in df.columns else pd.NA
     df["industry4"] = df["industry_code"] if "industry_code" in df.columns else pd.NA
-    for c in ["year", "quarter", "revenue_prev_q", "revenue_cur_q", "revenue_qoq", "op_prev_q", "op_cur_q", "op_qoq"]:
+    for c in ["year", "quarter", "period_q2", "period_q1", "period_q0", "revenue_q2", "revenue_q1", "revenue_q0", "op_q2", "op_q1", "op_q0", "revenue_prev_q", "revenue_cur_q", "revenue_qoq", "op_prev_q", "op_cur_q", "op_qoq"]:
         if c not in df.columns:
             df[c] = pd.NA
 
@@ -907,7 +1092,6 @@ def merge_execution_plan(detail: pd.DataFrame, execution_plan_path: str | None) 
         "day1_qty", "day1_order_value",
         "day2_qty", "day2_order_value",
         "day3_qty", "day3_order_value",
-        "est_slippage_bps",
     ]
     keep = [c for c in keep if c in ex.columns]
     ex = ex[keep].drop_duplicates("ticker", keep="last").copy()
@@ -943,10 +1127,12 @@ def merge_supplemental(detail: pd.DataFrame, supp_paths: list[str], asof: str | 
         # first try code->industry name map
         out = merge_code_name_map(out, raw)
 
-        qsnap = build_quarter_snapshot(raw_base)
+        # Trend columns must be built from full supplemental history.
+        # raw_base may contain only the target quarter.
+        qsnap = build_quarter_snapshot(raw)
         if qsnap is not None:
             out = out.merge(qsnap, on="ticker", how="left", suffixes=("", "__qraw"))
-            for c in ["year", "quarter", "revenue_prev_q", "revenue_cur_q", "revenue_qoq", "op_prev_q", "op_cur_q", "op_qoq"]:
+            for c in ["year", "quarter", "period_q2", "period_q1", "period_q0", "revenue_q2", "revenue_q1", "revenue_q0", "op_q2", "op_q1", "op_q0", "revenue_prev_q", "revenue_cur_q", "revenue_qoq", "op_prev_q", "op_cur_q", "op_qoq"]:
                 rc = f"{c}__qraw"
                 if rc in out.columns:
                     if c in out.columns:
@@ -1143,27 +1329,6 @@ def _build_quality_penalty_note(strategy_cfg: dict | None) -> dict:
     return {"present": True, "enabled": enabled, "lines": lines}
 
 
-def _build_expectation_overlay_note(strategy_cfg: dict | None) -> dict:
-    cfg = _extract_scoring_subcfg(strategy_cfg, "expectation_overlay")
-    if not cfg:
-        top = strategy_cfg.get("expectation_overlay") if isinstance(strategy_cfg, dict) else None
-        cfg = top if isinstance(top, dict) else None
-    if not cfg:
-        return {"present": False, "enabled": False, "lines": []}
-
-    enabled = bool(cfg.get("enabled", False))
-    lines = [
-        f"Expectation overlay 모듈은 {'활성화' if enabled else '비활성화'} 상태입니다.",
-        "이 모듈은 기본 factor score 이후 추가 기대점수(expectation_score) 또는 기대 패널티(expectation_penalty)를 반영하는 후처리 계층입니다.",
-    ]
-    source = cfg.get("source") or cfg.get("model_name") or cfg.get("description")
-    if source:
-        lines.append(f"- 기대반영 입력/출처: **{source}**")
-    if not enabled:
-        lines.append("- 현재 설정 기준으로는 최종 선별 점수에 expectation overlay가 반영되지 않습니다.")
-    return {"present": True, "enabled": enabled, "lines": lines}
-
-
 def _build_ai_weighting_note(strategy_cfg: dict | None) -> dict:
     """
     Returns:
@@ -1257,10 +1422,9 @@ def build_module_notes_md_block(spec: dict) -> list[str]:
     sections = []
     title_map = {
         "quality_penalty": "품질 소프트 패널티",
-        "expectation_overlay": "Expectation Overlay",
         "ai_weighting": "AI/ML 가중치 조정",
     }
-    for key in ["quality_penalty", "expectation_overlay", "ai_weighting"]:
+    for key in ["quality_penalty", "ai_weighting"]:
         info = module_notes.get(key) or {}
         lines = info.get("lines") or []
         if lines:
@@ -1283,10 +1447,9 @@ def build_module_notes_html(spec: dict) -> str:
     sections = []
     title_map = {
         "quality_penalty": "품질 소프트 패널티",
-        "expectation_overlay": "Expectation Overlay",
         "ai_weighting": "AI/ML 가중치 조정",
     }
-    for key in ["quality_penalty", "expectation_overlay", "ai_weighting"]:
+    for key in ["quality_penalty", "ai_weighting"]:
         info = module_notes.get(key) or {}
         lines = info.get("lines") or []
         if lines:
@@ -1336,6 +1499,54 @@ def build_module_notes_html(spec: dict) -> str:
     return "".join(rendered)
 
 
+
+
+def _clip_tiers_note(scoring_cfg: dict) -> str:
+    """Return a human-readable tiered clipping note for the report.
+
+    Display-only helper. It is deliberately tolerant of multiple config shapes
+    because older strategy YAMLs used slightly different key names. It never
+    affects scoring, AI overlay, portfolio construction, or execution logic.
+    """
+    if not isinstance(scoring_cfg, dict):
+        return ""
+
+    zcfg = scoring_cfg.get("zscore_clip")
+    candidates = [
+        scoring_cfg.get("clip_tiers"),
+        scoring_cfg.get("tiered_clip"),
+    ]
+    if isinstance(zcfg, dict):
+        candidates.extend([zcfg.get("clip_tiers"), zcfg.get("tiered_clip")])
+
+    tiers = None
+    for candidate in candidates:
+        if isinstance(candidate, dict):
+            if candidate.get("enabled", True) is False:
+                continue
+            candidate = candidate.get("tiers") or candidate.get("items") or candidate.get("values")
+        if isinstance(candidate, list) and candidate:
+            tiers = candidate
+            break
+
+    if not tiers:
+        return ""
+
+    parts = []
+    for item in tiers:
+        if isinstance(item, dict):
+            upper = item.get("upto", item.get("abs_z_lte", item.get("upper", item.get("threshold"))))
+            mult = item.get("slope", item.get("mult", item.get("multiplier", item.get("weight"))))
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            upper, mult = item[0], item[1]
+        else:
+            continue
+        if upper is not None and mult is not None:
+            parts.append(f"|z|≤{upper}: {mult}배")
+
+    return "tiered_clip=(" + ", ".join(parts) + ")" if parts else ""
+
+
 def get_score_spec(strategy: str, strategy_cfg: dict | None = None) -> dict:
     known_factor_notes = {
         "OpIncome_acc2": "최근 구간에서 영업이익 증가 속도가 얼마나 가속되었는지를 나타내는 팩터. 값이 높을수록 영업이익 개선 속도가 빨라진 것으로 해석한다.",
@@ -1349,7 +1560,7 @@ def get_score_spec(strategy: str, strategy_cfg: dict | None = None) -> dict:
     }
 
     quality_note = _build_quality_penalty_note(strategy_cfg)
-    expectation_note = _build_expectation_overlay_note(strategy_cfg)
+    expectation_note = {"present": False, "enabled": False, "lines": []}
     ai_note = _build_ai_weighting_note(strategy_cfg)
 
     default = {
@@ -1362,7 +1573,6 @@ def get_score_spec(strategy: str, strategy_cfg: dict | None = None) -> dict:
         "weights": None,
         "module_notes": {
             "quality_penalty": quality_note,
-            "expectation_overlay": expectation_note,
             "ai_weighting": ai_note,
         },
     }
@@ -1415,8 +1625,7 @@ def get_score_spec(strategy: str, strategy_cfg: dict | None = None) -> dict:
                 },
                 "module_notes": {
                     "quality_penalty": quality_note,
-                    "expectation_overlay": expectation_note,
-                    "ai_weighting": ai_note,
+                            "ai_weighting": ai_note,
                 },
             },
         }
@@ -1462,10 +1671,6 @@ def get_score_spec(strategy: str, strategy_cfg: dict | None = None) -> dict:
         calc_steps.append(f"{next_step}) 품질 소프트 패널티가 활성화된 경우 순이익·CFO 관련 품질 패널티를 추가 반영한다.")
         next_step += 1
 
-    if expectation_note.get("enabled"):
-        calc_steps.append(f"{next_step}) expectation overlay가 활성화된 경우 기대점수 또는 기대 패널티를 후처리로 반영한다.")
-        next_step += 1
-
     if ai_note.get("applied_to_score"):
         calc_steps.append(f"{next_step}) AI/ML 가중치 조정 모듈이 활성화된 경우 factor별 조정계수(α_i)를 반영해 보정 점수를 계산한다.")
         next_step += 1
@@ -1500,17 +1705,13 @@ def get_score_spec(strategy: str, strategy_cfg: dict | None = None) -> dict:
         extra.append("quality_soft_penalty=on")
     elif quality_note.get("present"):
         extra.append("quality_soft_penalty=off")
-    if expectation_note.get("enabled"):
-        extra.append("expectation_overlay=on")
-    elif expectation_note.get("present"):
-        extra.append("expectation_overlay=off")
     if ai_note.get("applied_to_score"):
         extra.append("ai_weighting=on")
     elif ai_note.get("present"):
         extra.append("ai_weighting=defined_not_applied")
     clip_tiers_note = _clip_tiers_note(scoring_cfg)
     if clip_tiers_note:
-        extra.append(f"tiered_clip=({clip_tiers_note})")
+        extra.append(clip_tiers_note)
 
     scoring_note = f"Cross-sectional {scoring_method} 기준 조합"
     if extra:
@@ -1527,7 +1728,6 @@ def get_score_spec(strategy: str, strategy_cfg: dict | None = None) -> dict:
         "scoring": scoring_cfg,
         "module_notes": {
             "quality_penalty": quality_note,
-            "expectation_overlay": expectation_note,
             "ai_weighting": ai_note,
         },
     }
@@ -1541,11 +1741,23 @@ def add_score_breakdown(df: pd.DataFrame, strategy: str, strategy_cfg: dict | No
     if exact_available:
         for c in exact_cols:
             out[c] = pd.to_numeric(out[c], errors="coerce")
-        out["score_rebuilt"] = out[exact_cols].sum(axis=1, min_count=1)
-        if "score" in out.columns:
-            out["score_diff_vs_reported"] = pd.to_numeric(out["score"], errors="coerce") - pd.to_numeric(out["score_rebuilt"], errors="coerce")
+
+        out["score_factor_sum"] = out[exact_cols].sum(axis=1, min_count=1)
+        out["score_rebuilt_pre_penalty"] = out["score_factor_sum"]
+        if "quality_penalty_total" in out.columns:
+            penalty = pd.to_numeric(out["quality_penalty_total"], errors="coerce").fillna(0.0)
         else:
+            penalty = 0.0
+        out["score_rebuilt_after_penalty"] = pd.to_numeric(out["score_factor_sum"], errors="coerce") + penalty
+
+        if "score" in out.columns:
+            score_num = pd.to_numeric(out["score"], errors="coerce")
+            out["score_rebuilt"] = score_num.where(score_num.notna(), out["score_rebuilt_after_penalty"])
+            out["score_diff_vs_reported"] = score_num - pd.to_numeric(out["score_rebuilt"], errors="coerce")
+        else:
+            out["score_rebuilt"] = out["score_rebuilt_after_penalty"]
             out["score_diff_vs_reported"] = pd.NA
+
         out["score_rebuild_method"] = "exact_from_scores_csv"
         return out
 
@@ -1586,8 +1798,114 @@ def add_score_breakdown(df: pd.DataFrame, strategy: str, strategy_cfg: dict | No
     return out
 
 
-<<<<<<< HEAD
-=======
+
+
+def normalize_runtime_ai_overlay_for_report(df: pd.DataFrame) -> pd.DataFrame:
+    """Normalize AI overlay display fields from actual runtime active flag only.
+
+    Display-only helper. It does not change scores, ranks, actions, filters,
+    execution plan, holdings, or portfolio construction. The report must not
+    infer AI activation from *_ai_mult columns alone because score generation
+    may emit neutral multiplier columns even when AI overlay is OFF.
+    """
+    out = df.copy()
+    ai_mult_cols = [
+        "ai_mult_profit_accel",
+        "ai_mult_revenue_support",
+        "ai_mult_balance_sheet",
+        "ai_mult_op_streak",
+        "ai_mult_rev_streak",
+        "ai_mult_revenue_log",
+    ]
+
+    if "ai_overlay_active" not in out.columns:
+        out["ai_overlay_active"] = 0
+
+    active = pd.to_numeric(out["ai_overlay_active"], errors="coerce").fillna(0).gt(0)
+    out["ai_overlay_active"] = active.astype(int)
+
+    for c in ai_mult_cols:
+        if c in out.columns:
+            out.loc[~active, c] = pd.NA
+
+    return out
+def _runtime_ai_overlay_active(detail: pd.DataFrame) -> bool:
+    """Return True only when runtime score output explicitly marks AI overlay active."""
+    if not isinstance(detail, pd.DataFrame) or "ai_overlay_active" not in detail.columns:
+        return False
+    vals = pd.to_numeric(detail["ai_overlay_active"], errors="coerce").fillna(0)
+    return bool(vals.gt(0).any())
+
+
+def apply_runtime_overlay_notes(spec: dict, detail: pd.DataFrame) -> dict:
+    """Adjust report wording using actual runtime AI overlay state only.
+
+    Display-only. This function deliberately ignores the mere presence of
+    *_ai_mult columns because score_latest_rebalance.py may emit multiplier
+    columns filled with 1.0 even when AI overlay is inactive.
+    """
+    out = dict(spec or {})
+    try:
+        active = _runtime_ai_overlay_active(detail)
+
+        note = str(out.get("scoring_note", ""))
+        if active:
+            if "ai_weighting=defined_not_applied" in note:
+                note = note.replace("ai_weighting=defined_not_applied", "ai_weighting=applied_runtime")
+            elif "ai_weighting=on" in note:
+                note = note.replace("ai_weighting=on", "ai_weighting=applied_runtime")
+            elif "ai_weighting=applied_runtime" not in note:
+                note = note + " / ai_weighting=applied_runtime" if note else "ai_weighting=applied_runtime"
+
+            out["scoring_note"] = note
+
+            steps = list(out.get("calc_steps", []))
+            msg = "AI/ML bucket overlay가 런타임 산출물에 포함된 경우 factor별 multiplier를 반영한 score를 사용한다."
+            if not any("AI/ML bucket overlay" in str(x) for x in steps):
+                insert_at = len(steps)
+                for i, s in enumerate(steps):
+                    if "holding bonus" in str(s):
+                        insert_at = i
+                        break
+                steps.insert(insert_at, msg)
+                normalized = []
+                for i, s in enumerate(steps, start=1):
+                    body = re.sub(r"^\s*\d+\)\s*", "", str(s))
+                    normalized.append(f"{i}) {body}")
+                out["calc_steps"] = normalized
+        else:
+            for token in ["ai_weighting=applied_runtime", "ai_weighting=on"]:
+                if token in note:
+                    note = note.replace(token, "ai_weighting=inactive_runtime")
+            out["scoring_note"] = note
+
+            module_notes = dict(out.get("module_notes", {}) or {})
+            ai_note = dict(module_notes.get("ai_weighting", {}) or {})
+            if ai_note.get("present") or ai_note.get("section_enabled"):
+                ai_note["enabled"] = False
+                ai_note["applied_to_score"] = False
+                ai_note["lines"] = [
+                    "AI/ML 가중치 조정 모듈은 설정 파일에 정의되어 있을 수 있으나, 이번 런타임 산출물 기준으로는 비활성입니다.",
+                    "따라서 이번 보고서의 score는 AI multiplier가 아니라 기본 팩터 점수와 품질 패널티, holding bonus 기준으로 해석합니다.",
+                ]
+                module_notes["ai_weighting"] = ai_note
+                out["module_notes"] = module_notes
+
+    except Exception:
+        return spec
+    return out
+
+
+def clean_report_scoring_note(spec: dict) -> dict:
+    out = dict(spec or {})
+    note = str(out.get("scoring_note", ""))
+    note = re.sub(r"\s*/\s*tiered_clip=\(\s*/\s*tiered_clip=", " / tiered_clip=", note)
+    note = note.replace("tiered_clip=( / tiered_clip=", "tiered_clip=")
+    if "tiered_clip=(" in note:
+        note = note.replace("))", ")")
+    out["scoring_note"] = note
+    return out
+
 def add_quality_penalty_info(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
 
@@ -1598,7 +1916,6 @@ def add_quality_penalty_info(df: pd.DataFrame) -> pd.DataFrame:
         "quality_penalty_cfo_warn",
         "quality_penalty_cfo_isnull",
         "hold_bonus_applied",
-        "expectation_penalty",
     ]
     for c in numeric_cols:
         if c in out.columns:
@@ -1668,7 +1985,130 @@ def add_quality_penalty_info(df: pd.DataFrame) -> pd.DataFrame:
 
     return out
 
->>>>>>> 09e60c16 (feat: live rebalance pipeline cleanup + reporting system stabilization)
+
+def auto_detect_universe_path(asof: str | None) -> Path | None:
+    """Find the universe parquet/csv used by the live cycle, when available.
+
+    Display/report enrichment only. Missing universe files are tolerated.
+    """
+    if not asof:
+        return None
+    roots = [
+        Path("data/processed"),
+        Path("data/interim"),
+        Path("data"),
+    ]
+    patterns = [
+        f"universe__asof={asof}__*.parquet",
+        f"universe__asof={asof}__*.csv",
+    ]
+    for root in roots:
+        if not root.exists():
+            continue
+        cands: list[Path] = []
+        for pat in patterns:
+            cands.extend(sorted(root.glob(pat)))
+        if cands:
+            return cands[-1]
+    return None
+
+
+def merge_universe_meta(detail: pd.DataFrame, asof: str | None = None) -> pd.DataFrame:
+    """Attach market-cap cohort metadata for report interpretation.
+
+    The score/action artifacts do not always carry mcap_group or mcap_rank_pct.
+    When the universe file is present, derive these from the same universe used by
+    the run. This function never changes action/score/execution fields.
+    """
+    out = detail.copy()
+    p = auto_detect_universe_path(asof)
+    if p is None or not p.exists():
+        return out
+    try:
+        uni = load_any_table(p)
+    except Exception as e:
+        print(f"[WARN] failed to load universe meta={p}: {e}")
+        return out
+    if "ticker" not in uni.columns:
+        return out
+
+    uni = uni.copy()
+    uni["ticker"] = normalize_ticker(uni["ticker"])
+
+    if "mcap" in uni.columns:
+        uni["mcap"] = pd.to_numeric(uni["mcap"], errors="coerce")
+    elif "market_cap" in uni.columns:
+        uni["mcap"] = pd.to_numeric(uni["market_cap"], errors="coerce")
+    elif "시가총액" in uni.columns:
+        uni["mcap"] = pd.to_numeric(uni["시가총액"], errors="coerce")
+
+    if "mcap_rank_pct" not in uni.columns and "mcap" in uni.columns:
+        # 0.0 = largest, 1.0 = smallest within the selected universe.
+        uni["mcap_rank_pct"] = uni["mcap"].rank(method="min", ascending=False, pct=True)
+
+    if "mcap_group" not in uni.columns and "mcap" in uni.columns:
+        try:
+            q_large = uni["mcap"].quantile(2 / 3)
+            q_mid = uni["mcap"].quantile(1 / 3)
+            uni["mcap_group"] = np.select(
+                [uni["mcap"].ge(q_large), uni["mcap"].ge(q_mid)],
+                ["large", "mid"],
+                default="small",
+            )
+        except Exception:
+            pass
+
+    keep = [c for c in ["ticker", "mcap_group", "mcap_rank_pct"] if c in uni.columns]
+    if len(keep) <= 1:
+        return out
+    uni = uni[keep].drop_duplicates("ticker", keep="last").copy()
+    out = out.merge(uni.rename(columns={c: f"{c}__universe" for c in keep if c != "ticker"}), on="ticker", how="left")
+    for c in ["mcap_group", "mcap_rank_pct"]:
+        uc = f"{c}__universe"
+        if uc not in out.columns:
+            continue
+        if c not in out.columns:
+            out[c] = pd.NA
+        if c == "mcap_group":
+            out[c] = coalesce_prefer(out[c], out[uc], stringy=True)
+        else:
+            out[c] = coalesce_prefer(out[c], out[uc], stringy=False)
+    return out.drop(columns=[c for c in out.columns if c.endswith("__universe")], errors="ignore")
+
+
+def normalize_report_metadata(detail: pd.DataFrame) -> pd.DataFrame:
+    """Normalize report-only aliases without touching strategy results."""
+    out = detail.copy()
+
+    alias_pairs = [
+        ("selection_bucket", "target_selection_bucket", True),
+        ("kept_from_previous", "target_kept_from_previous", False),
+        ("filter_status", "filter_status_diag", True),
+        ("passed_filters", "passed_filters_diag", False),
+        ("selected_topk", "selected_topk_diag", False),
+        ("in_target_topk", "in_target_topk_diag", False),
+    ]
+    for dst, src, stringy in alias_pairs:
+        if src not in out.columns:
+            continue
+        if dst not in out.columns:
+            out[dst] = pd.NA
+        out[dst] = coalesce_prefer(out[dst], out[src], stringy=stringy)
+
+    # BUY rows created from target top-k may not carry diagnostic cohort fields in actions_csv.
+    # If they have a valid score/rank, they are score-available target-cohort rows for report purposes.
+    if "cohort_status" not in out.columns:
+        out["cohort_status"] = pd.NA
+    if "score_availability_reason" not in out.columns:
+        out["score_availability_reason"] = pd.NA
+    score_num = pd.to_numeric(out.get("score"), errors="coerce") if "score" in out.columns else pd.Series(pd.NA, index=out.index)
+    missing_cohort = out["cohort_status"].astype("string").replace({"": pd.NA, "nan": pd.NA, "None": pd.NA, "<NA>": pd.NA}).isna()
+    out.loc[missing_cohort & score_num.notna(), "cohort_status"] = "in_target_cohort"
+    missing_reason = out["score_availability_reason"].astype("string").replace({"": pd.NA, "nan": pd.NA, "None": pd.NA, "<NA>": pd.NA}).isna()
+    out.loc[missing_reason & score_num.notna(), "score_availability_reason"] = "scored_in_target_cohort"
+
+    return out
+
 
 # ----------------------------
 # performance section
@@ -1735,11 +2175,17 @@ def auto_build_performance_summary(
             else:
                 nav_df["daily_return"] = pd.to_numeric(nav_df["nav"], errors="coerce").pct_change()
 
-        if "cum_return" not in nav_df.columns:
-            nav_df["cum_return"] = (1 + pd.to_numeric(nav_df["daily_return"], errors="coerce").fillna(0.0)).cumprod()
+        nav_num = pd.to_numeric(nav_df["nav"], errors="coerce")
+        initial_nav = nav_num.dropna().iloc[0] if nav_num.notna().any() else pd.NA
 
-        if "drawdown" not in nav_df.columns:
-            nav_df["drawdown"] = nav_df["cum_return"] / nav_df["cum_return"].cummax() - 1
+        if "cum_return" not in nav_df.columns:
+            nav_df["cum_return"] = nav_num / initial_nav - 1 if pd.notna(initial_nav) and initial_nav != 0 else pd.NA
+
+        # drawdown은 반드시 NAV 기준으로 재계산한다.
+        # cum_return은 수익률(-0.03, 0.04...)이라 그 자체로 cummax를 잡으면
+        # 기준점 0 때문에 -80%대 같은 잘못된 낙폭이 생길 수 있다.
+        running_peak = nav_num.cummax()
+        nav_df["drawdown"] = nav_num / running_peak - 1
 
         num_positions = None
         if perf_contrib_path and Path(perf_contrib_path).exists():
@@ -1755,7 +2201,7 @@ def auto_build_performance_summary(
             "end_date": str(nav_df["date"].iloc[-1].date()) if "date" in nav_df.columns and pd.notna(nav_df["date"].iloc[-1]) else None,
             "initial_nav": safe_num(nav_df["nav"].iloc[0]),
             "last_nav": safe_num(nav_df["nav"].iloc[-1]),
-            "cum_return": safe_num(nav_df["cum_return"].iloc[-1] - 1),
+            "cum_return": safe_num((nav_num.iloc[-1] / initial_nav - 1) if pd.notna(initial_nav) and initial_nav != 0 else nav_df["cum_return"].iloc[-1]),
             "max_drawdown": safe_num(nav_df["drawdown"].min()),
             "num_positions": num_positions,
         }
@@ -1808,6 +2254,39 @@ def enrich_performance_with_names(perf: dict | None, detail_or_summary: pd.DataF
     return out
 
 
+
+def _weekly_nav_snapshot(df: pd.DataFrame, date_col: str = "date") -> pd.DataFrame:
+    """Return weekly last-observation NAV snapshots while preserving columns.
+
+    Report-only helper. It converts the daily performance table into a weekly
+    monitoring table by selecting the last available trading row for each
+    Friday-ending week. The first and final available rows are always retained
+    so short evaluation windows and non-Friday evaluation dates remain visible.
+    """
+    if df is None or len(df) == 0 or date_col not in df.columns:
+        return df.tail(10).copy() if isinstance(df, pd.DataFrame) else pd.DataFrame()
+
+    x = df.copy()
+    x["_date_dt"] = pd.to_datetime(x[date_col], errors="coerce")
+    x = x.dropna(subset=["_date_dt"]).sort_values("_date_dt").copy()
+    if len(x) == 0:
+        return df.tail(10).copy()
+
+    first_row = x.head(1).copy()
+    last_row = x.tail(1).copy()
+
+    weekly = (
+        x.groupby(pd.Grouper(key="_date_dt", freq="W-FRI"), group_keys=False)
+         .tail(1)
+         .copy()
+    )
+
+    out = pd.concat([first_row, weekly, last_row], ignore_index=True)
+    out = out.drop_duplicates(subset=["_date_dt"], keep="last").sort_values("_date_dt")
+    out = out.drop(columns=["_date_dt"], errors="ignore").reset_index(drop=True)
+    return out.tail(12).copy()
+
+
 def make_performance_snapshot_tables(perf: dict | None) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     if not perf:
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
@@ -1815,6 +2294,9 @@ def make_performance_snapshot_tables(perf: dict | None) -> tuple[pd.DataFrame, p
     summary = perf.get("summary") or {}
     daily = perf.get("daily") if isinstance(perf.get("daily"), pd.DataFrame) else pd.DataFrame()
     contrib = perf.get("contrib") if isinstance(perf.get("contrib"), pd.DataFrame) else pd.DataFrame()
+    if "max_drawdown" not in summary and len(daily) > 0 and "nav" in daily.columns:
+        nav_num = pd.to_numeric(daily["nav"], errors="coerce")
+        summary["max_drawdown"] = safe_num((nav_num / nav_num.cummax() - 1).min())
 
     summary_rows = []
     for k, label in [
@@ -1843,11 +2325,29 @@ def make_performance_snapshot_tables(perf: dict | None) -> tuple[pd.DataFrame, p
             daily_df["nav"] = pd.to_numeric(daily_df["value"], errors="coerce")
         if "daily_return" not in daily_df.columns and "return" in daily_df.columns:
             daily_df["daily_return"] = pd.to_numeric(daily_df["return"], errors="coerce")
-        if "drawdown" not in daily_df.columns and "cum_return" in daily_df.columns:
-            cr = pd.to_numeric(daily_df["cum_return"], errors="coerce")
-            daily_df["drawdown"] = cr / cr.cummax() - 1
-        keep = [c for c in ["date", "nav", "daily_return", "cum_return", "benchmark_cum_return", "drawdown"] if c in daily_df.columns]
-        daily_df = daily_df[keep].tail(10).copy()
+        # drawdown은 보고서 표시 시점에서도 NAV 기준으로 강제 재계산한다.
+        # 기존 daily 파일에 drawdown 컬럼이 있더라도 잘못 저장된 값일 수 있으므로 덮어쓴다.
+        if "nav" in daily_df.columns:
+            nav_num = pd.to_numeric(daily_df["nav"], errors="coerce")
+            running_peak = nav_num.cummax()
+            daily_df["drawdown"] = nav_num / running_peak - 1
+            daily_df["peak_nav"] = running_peak
+
+            if "date" in daily_df.columns:
+                peak_idx = nav_num.expanding().apply(lambda x: x.idxmax(), raw=False)
+                daily_df["drawdown_peak_date"] = peak_idx.map(
+                    lambda i: daily_df.loc[int(i), "date"] if pd.notna(i) else pd.NA)
+
+        elif "cum_return" in daily_df.columns:
+            growth = 1 + pd.to_numeric(daily_df["cum_return"], errors="coerce")
+            daily_df["drawdown"] = growth / growth.cummax() - 1
+        keep = [c for c in [
+            "date", "nav", "daily_return", "cum_return",
+            "benchmark_cum_return", "drawdown",
+            "peak_nav", "drawdown_peak_date"
+        ] if c in daily_df.columns]
+        daily_df = daily_df[keep].copy()
+        daily_df = _weekly_nav_snapshot(daily_df, date_col="date")
 
     contrib_df = pd.DataFrame()
     if len(contrib) > 0:
@@ -1856,7 +2356,20 @@ def make_performance_snapshot_tables(perf: dict | None) -> tuple[pd.DataFrame, p
             contrib_df["ticker"] = normalize_ticker(contrib_df["ticker"])
         if "contribution_to_total_return" not in contrib_df.columns and "contribution" in contrib_df.columns:
             contrib_df["contribution_to_total_return"] = pd.to_numeric(contrib_df["contribution"], errors="coerce")
-        keep = [c for c in ["ticker", "name", "position_value", "pnl", "contribution_to_total_return", "weight_at_last_nav"] if c in contrib_df.columns]
+        if "position_period_return" not in contrib_df.columns:
+            if {"price", "base_price"}.issubset(contrib_df.columns):
+                price = pd.to_numeric(contrib_df["price"], errors="coerce")
+                base_price = pd.to_numeric(contrib_df["base_price"], errors="coerce")
+                contrib_df["position_period_return"] = price / base_price - 1
+            elif {"position_value", "base_value"}.issubset(contrib_df.columns):
+                position_value = pd.to_numeric(contrib_df["position_value"], errors="coerce")
+                base_value = pd.to_numeric(contrib_df["base_value"], errors="coerce")
+                contrib_df["position_period_return"] = position_value / base_value - 1
+            elif {"pnl", "base_value"}.issubset(contrib_df.columns):
+                pnl = pd.to_numeric(contrib_df["pnl"], errors="coerce")
+                base_value = pd.to_numeric(contrib_df["base_value"], errors="coerce")
+                contrib_df["position_period_return"] = pnl / base_value
+        keep = [c for c in ["ticker", "name", "position_value", "pnl", "position_period_return", "contribution_to_total_return", "weight_at_last_nav"] if c in contrib_df.columns]
         if keep:
             contrib_df = contrib_df[keep].copy()
             if "name" not in contrib_df.columns:
@@ -1899,9 +2412,9 @@ def _format_performance_df_for_display(df: pd.DataFrame) -> pd.DataFrame:
         return view
 
     for c in view.columns:
-        if c in ["nav", "position_value", "pnl", "value"]:
+        if c in ["nav", "peak_nav", "position_value", "pnl", "value"]:
             view[c] = view[c].map(lambda x: fmt_num(x, 0))
-        elif c in ["daily_return", "cum_return", "benchmark_cum_return", "active_return", "drawdown", "contribution_to_total_return", "weight_at_last_nav"]:
+        elif c in ["daily_return", "cum_return", "benchmark_cum_return", "active_return", "drawdown", "position_period_return", "contribution_to_total_return", "weight_at_last_nav"]:
             view[c] = view[c].map(lambda x: f"{fmt_ratio(safe_num(x) * 100, 2)}%" if safe_num(x) is not None else "-")
         elif c in ["ticker"]:
             view[c] = view[c].map(text_or_dash)
@@ -1910,18 +2423,8 @@ def _format_performance_df_for_display(df: pd.DataFrame) -> pd.DataFrame:
     return view
 
 
-def dataframe_to_markdown_performance(df: pd.DataFrame) -> str:
-    if df.empty:
-        return "_없음_"
-    view = _format_performance_df_for_display(df)
-    return dataframe_to_markdown(view, max_rows=len(view))
-
-
-def render_html_performance_table(df: pd.DataFrame, title: str) -> str:
-    if df.empty:
-        return f"<section><h2>{html.escape(title)}</h2><p>없음</p></section>"
-
-    desc_map = {
+def _performance_col_ko(c: str) -> str:
+    return {
         "metric": "지표",
         "value": "값",
         "date": "일자",
@@ -1935,13 +2438,41 @@ def render_html_performance_table(df: pd.DataFrame, title: str) -> str:
         "name": "종목명",
         "position_value": "평가금액",
         "pnl": "손익",
+        "position_period_return": "종목별 기간 수익률",
         "contribution_to_total_return": "총수익 기여도",
         "weight_at_last_nav": "최종 비중",
-    }
+        "peak_nav": "기준 고점 NAV",
+        "drawdown_peak_date": "낙폭 기준 고점일",
+    }.get(str(c), str(c))
+
+
+def _performance_col_md(c: str) -> str:
+    ko = _performance_col_ko(c)
+    return f"{c}<br>({ko})" if ko and ko != str(c) else str(c)
+
+
+def _performance_col_html(c: str) -> str:
+    ko = _performance_col_ko(c)
+    if ko and ko != str(c):
+        return f"{html.escape(str(c))}<br><span class=\"ko-label\">({html.escape(ko)})</span>"
+    return html.escape(str(c))
+
+
+def dataframe_to_markdown_performance(df: pd.DataFrame) -> str:
+    if df.empty:
+        return "_없음_"
+    view = _format_performance_df_for_display(df)
+    view = view.rename(columns={c: _performance_col_md(c) for c in view.columns})
+    return dataframe_to_markdown(view, max_rows=len(view))
+
+
+def render_html_performance_table(df: pd.DataFrame, title: str) -> str:
+    if df.empty:
+        return f"<section><h2>{html.escape(title)}</h2><p>없음</p></section>"
 
     view = _format_performance_df_for_display(df)
     cols = list(view.columns)
-    header = "".join(f"<th>{html.escape(str(c))}</th>" for c in cols)
+    header = "".join(f"<th>{_performance_col_html(c)}</th>" for c in cols)
     body_rows = []
     for _, row in view.iterrows():
         cells = []
@@ -1951,13 +2482,11 @@ def render_html_performance_table(df: pd.DataFrame, title: str) -> str:
             cells.append(f"<td>{html.escape(s)}</td>")
         body_rows.append("<tr>" + "".join(cells) + "</tr>")
 
-    caption = " | ".join(f"{c}: {desc_map.get(c, c)}" for c in cols)
     return f"""
 <section class="table-section">
   <h2>{html.escape(title)}</h2>
   <div class="table-wrap">
     <table class="summary-table">
-      <caption>{html.escape(caption)}</caption>
       <thead><tr>{header}</tr></thead>
       <tbody>{''.join(body_rows)}</tbody>
     </table>
@@ -1978,9 +2507,9 @@ def build_performance_html(perf: dict | None, title: str | None = None) -> str:
     else:
         blocks.append("<h3>0.1 요약 성과</h3><p>없음</p>")
     if not daily_df.empty:
-        blocks.append(render_html_performance_table(daily_df, "0.2 최근 일별 NAV / 수익률"))
+        blocks.append(render_html_performance_table(daily_df, "0.2 리밸런싱 이후 주간 NAV / 수익률"))
     else:
-        blocks.append("<h3>0.2 최근 일별 NAV / 수익률</h3><p>없음</p>")
+        blocks.append("<h3>0.2 리밸런싱 이후 주간 NAV / 수익률</h3><p>없음</p>")
     if not contrib_df.empty:
         blocks.append(render_html_performance_table(contrib_df, "0.3 종목별 기여도"))
     else:
@@ -2005,23 +2534,58 @@ def _series_has_meaningful_values(s: pd.Series | pd.DataFrame) -> bool:
     return bool(x.ne("").any())
 
 
+
+def _report_base_col(col: str) -> str:
+    """Return the raw dataframe column key from a rendered report label.
+
+    Summary labels may be rendered as either:
+      - score_adj(최종점수)
+      - score_adj<br>(최종점수)
+    Keep this helper tolerant so number formatting remains stable across
+    markdown and HTML output.
+    """
+    s = str(col).strip()
+    s = re.split(r"<br\s*/?>", s, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+    s = s.split("(", 1)[0].strip()
+    return s
+
+
+SUMMARY_COLUMN_LABELS = {
+    "ticker": "ticker<br>(종목코드)",
+    "name": "name<br>(종목명)",
+    "action": "action<br>(액션)",
+    "reason": "reason<br>(사유)",
+    "industry_name": "industry_name<br>(업종명)",
+    "mcap_group": "mcap_group<br>(시총그룹)",
+    "mcap_rank_pct": "mcap_rank_pct<br>(시총백분위)",
+    "selection_bucket": "selection_bucket<br>(선정버킷)",
+    "score_rank": "score_rank<br>(반영점수순위)",
+    "score_adj_rank": "score_adj_rank<br>(최종순위)",
+    "score_base": "score_base<br>(퀀트점수)",
+    "quality_penalty_total": "quality_penalty_total<br>(품질패널티)",
+    "score": "score<br>(품질/AI 반영점수)",
+    "hold_bonus": "hold_bonus<br>(보유보너스)",
+    "score_adj": "score_adj<br>(최종점수)",
+    "penalty_level": "penalty_level<br>(패널티등급)",
+    "penalty_reason": "penalty_reason<br>(패널티사유)",
+    "op_acc2_log1p": "op_acc2_log1p<br>(영업이익가속log)",
+    "contrib_op_log": "contrib_op_log<br>(영업이익기여)",
+    "op_growth_streak2": "op_streak<br>(영업이익연속)",
+    "rev_acc2": "rev_acc2<br>(매출가속)",
+    "contrib_rev": "contrib_rev<br>(매출기여)",
+    "rev_growth_streak2": "rev_streak<br>(매출연속)",
+    "debt_log": "debt_log<br>(부채로그)",
+    "contrib_debt": "contrib_debt<br>(부채기여)",
+    "cfo_isnull": "cfo_isnull<br>(CFO결측)",
+    "planned_qty": "planned_qty<br>(주문수량)",
+    "planned_value": "planned_value<br>(주문금액)",
+}
+
+SUMMARY_COLUMNS = list(SUMMARY_COLUMN_LABELS.keys())
+
+
 def _visible_summary_columns(df: pd.DataFrame) -> list[str]:
-    preferred = [
-        "ticker", "name", "action", "reason",
-        "industry_code", "industry_name", "mcap_group", "mcap_rank_pct",
-        "score", "score_adj", "hold_bonus_applied", "score_rank", "expectation_overlay_active", "expectation_score", "expectation_penalty", "quality_soft_penalty_active", "quality_penalty_total", "penalty_flag", "penalty_level", "penalty_reason", "penalty_desc", "quality_soft_penalty_active", "quality_penalty_total", "penalty_flag", "penalty_level", "penalty_reason", "penalty_desc", 
-        "op_acc2", "op_acc2_log1p", "contrib_op", "contrib_op_log", "op_growth_streak2", "contrib_op_streak",
-        "rev_acc2", "rev_acc2_log1p", "contrib_rev", "contrib_rev_log", "rev_growth_streak2", "contrib_rev_streak",
-        "debt_log", "contrib_debt", "cfo_to_assets", "contrib_cfo", "cfo_isnull", "contrib_missing", "score_rebuilt",
-        "price", "mcap", "year", "quarter",
-        "revenue_prev_q", "revenue_cur_q", "revenue_qoq", "op_prev_q", "op_cur_q", "op_qoq",
-        "revenue", "op_income", "net_income",
-        "per", "pbr", "psr",
-        "cohort_status", "score_availability_reason", "latest_available_rebalance_month", "latest_available_year", "latest_available_quarter",
-        "planned_qty", "planned_value", "day1_qty", "day1_value", "day2_qty", "day2_value", "day3_qty", "day3_value",
-        "est_slippage_bps",
-    ]
-    preferred = [c for c in preferred if c in df.columns]
+    preferred = [c for c in SUMMARY_COLUMNS if c in df.columns]
     always_keep = {"ticker", "name", "action", "reason"}
     out: list[str] = []
     for c in preferred:
@@ -2031,68 +2595,81 @@ def _visible_summary_columns(df: pd.DataFrame) -> list[str]:
 
 
 
-
 def _ordered_existing_columns(df: pd.DataFrame, ordered_cols: list[str]) -> list[str]:
     return [c for c in ordered_cols if c in df.columns]
 
 
-def _clip_tiers_note(scoring_cfg: dict) -> str:
-    tiers = scoring_cfg.get("clip_tiers", []) if isinstance(scoring_cfg, dict) else []
-    if not isinstance(tiers, list) or len(tiers) == 0:
-        return ""
-    parts = []
-    for item in tiers:
-        if not isinstance(item, dict):
-            continue
-        upto = item.get("upto")
-        slope = item.get("slope")
-        if upto is None or slope is None:
-            continue
-        parts.append(f"|z|≤{upto}: {slope}배")
-    return ", ".join(parts)
 def make_summary_table(df: pd.DataFrame) -> pd.DataFrame:
     cols = [
         "ticker", "report_name", "action", "reason",
-        "industry_code", "report_industry_name", "mcap_group", "mcap_rank_pct",
-        "score", "score_adj", "hold_bonus_applied", "score_rank", "expectation_overlay_active", "expectation_score", "expectation_penalty", "quality_soft_penalty_active", "quality_penalty_total", "penalty_flag", "penalty_level", "penalty_reason", "penalty_desc", "quality_soft_penalty_active", "quality_penalty_total", "penalty_flag", "penalty_level", "penalty_reason", "penalty_desc", 
-        "op_acc2", "op_acc2_log1p", "contrib_op", "contrib_op_log", "op_growth_streak2", "contrib_op_streak",
-        "rev_acc2", "rev_acc2_log1p", "contrib_rev", "contrib_rev_log", "rev_growth_streak2", "contrib_rev_streak",
-        "debt_log", "contrib_debt", "cfo_to_assets", "contrib_cfo", "cfo_isnull", "contrib_missing", "score_rebuilt",
-        "report_price", "report_mcap", "year", "quarter",
-        "revenue_prev_q", "revenue_cur_q", "revenue_qoq",
-        "op_prev_q", "op_cur_q", "op_qoq",
-        "revenue", "op_income", "net_income",
-        "per", "pbr", "psr",
-        "cohort_status", "score_availability_reason", "latest_available_rebalance_month", "latest_available_year", "latest_available_quarter",
+        "report_industry_name", "mcap_group", "mcap_rank_pct", "selection_bucket", "target_selection_bucket",
+        "score_rank", "score_adj_rank", "score_base", "quality_penalty_total", "score", "hold_bonus_applied", "score_adj",
+        "penalty_level", "penalty_reason",
+        "op_acc2_log1p", "contrib_op_log", "op_growth_streak2",
+        "rev_acc2", "contrib_rev", "rev_growth_streak2",
+        "debt_log", "contrib_debt", "cfo_isnull",
         "exec__planned_total_qty", "exec__planned_total_value",
-        "exec__day1_qty", "exec__day1_order_value",
-        "exec__day2_qty", "exec__day2_order_value",
-        "exec__day3_qty", "exec__day3_order_value",
-        "exec__est_slippage_bps",
     ]
     cols = [c for c in cols if c in df.columns]
     out = df[cols].copy()
     out = _dedupe_columns_keep_first(out)
 
+    # HOLDING BONUS is part of score_adj; keep it visible in the summary table.
+    # If an older upstream action file lacks it, infer it only for display from
+    # score_adj - score. This does not change the underlying scoring.
+    if "hold_bonus_applied" not in out.columns and {"score", "score_adj"}.issubset(out.columns):
+        out["hold_bonus_applied"] = (
+            pd.to_numeric(out["score_adj"], errors="coerce")
+            - pd.to_numeric(out["score"], errors="coerce")
+        )
+
     rename = {
         "report_name": "name",
         "report_industry_name": "industry_name",
-        "report_price": "price",
-        "report_mcap": "mcap",
+        "target_selection_bucket": "selection_bucket",
+        "hold_bonus_applied": "hold_bonus",
         "exec__planned_total_qty": "planned_qty",
         "exec__planned_total_value": "planned_value",
-        "exec__day1_qty": "day1_qty",
-        "exec__day1_order_value": "day1_value",
-        "exec__day2_qty": "day2_qty",
-        "exec__day2_order_value": "day2_value",
-        "exec__day3_qty": "day3_qty",
-        "exec__day3_order_value": "day3_value",
-        "exec__est_slippage_bps": "est_slippage_bps",
     }
     out = out.rename(columns=rename)
     out = _dedupe_columns_keep_first(out)
     visible = _visible_summary_columns(out)
-    return out[visible].copy()
+    out = out[visible].copy()
+    return out.rename(columns={c: SUMMARY_COLUMN_LABELS.get(c, c) for c in out.columns})
+
+def _format_report_cell(base: str, value):
+    if pd.isna(value) or str(value) in ["<NA>", "nan", "None"]:
+        return "-"
+
+    int_cols = {
+        "score_rank", "score_adj_rank", "planned_qty", "day1_qty", "day2_qty", "day3_qty",
+        "cfo_isnull", "year", "quarter", "ai_overlay_active", "quality_soft_penalty_active",
+        "penalty_flag", "op_growth_streak2", "rev_growth_streak2",
+    }
+    money_cols = {
+        "mcap", "revenue", "op_income", "net_income", "planned_value", "day1_value", "day2_value", "day3_value",
+        "revenue_prev_q", "revenue_cur_q", "op_prev_q", "op_cur_q",
+        "revenue_q2", "revenue_q1", "revenue_q0", "op_q2", "op_q1", "op_q0",
+    }
+    num4_cols = {
+        "score_base", "score", "score_adj", "hold_bonus_applied", "hold_bonus", "op_acc2", "op_acc2_log1p",
+        "rev_acc2", "rev_acc2_log1p", "debt_log", "cfo_to_assets", "revenue_qoq", "op_qoq",
+        "per", "pbr", "psr", "ev_ebit", "ev_ebitda", "contrib_op", "contrib_op_log", "contrib_op_streak",
+        "contrib_rev", "contrib_rev_log", "contrib_rev_streak", "contrib_debt", "contrib_cfo", "contrib_missing",
+        "score_factor_sum", "score_rebuilt_pre_penalty", "score_rebuilt_after_penalty", "score_rebuilt",
+        "score_diff_vs_reported", "quality_penalty_total", "mcap_rank_pct",
+        "ai_mult_profit_accel", "ai_mult_revenue_support", "ai_mult_balance_sheet", "ai_mult_op_streak", "ai_mult_rev_streak",
+    }
+
+    if base in int_cols:
+        return fmt_num(value, 0)
+    if base in money_cols:
+        return fmt_large_krw(value)
+    if base == "price":
+        return fmt_num(value, 0)
+    if base in num4_cols:
+        return fmt_ratio(value, 4)
+    return text_or_dash(value)
 
 
 def dataframe_to_markdown(df: pd.DataFrame, max_rows: int = 30) -> str:
@@ -2101,16 +2678,8 @@ def dataframe_to_markdown(df: pd.DataFrame, max_rows: int = 30) -> str:
     view = df.head(max_rows).copy()
 
     for c in view.columns:
-        if c in [
-            "score", "score_adj", "score_rank", "op_acc2", "op_acc2_log1p", "rev_acc2", "rev_acc2_log1p", "debt_log", "cfo_to_assets", "revenue_qoq", "op_qoq",
-            "per", "pbr", "psr", "ev_ebit", "ev_ebitda", "contrib_op", "contrib_op_log", "contrib_op_streak", "contrib_rev", "contrib_rev_log", "contrib_rev_streak", "contrib_debt",
-            "contrib_cfo", "contrib_missing", "score_rebuilt", "score_diff_vs_reported", "est_slippage_bps", "quality_penalty_total"
-        ]:
-            view[c] = view[c].map(lambda x: fmt_ratio(x, 2))
-        elif c in ["price", "planned_qty", "day1_qty", "day2_qty", "day3_qty", "cfo_isnull", "year", "quarter"]:
-            view[c] = view[c].map(lambda x: fmt_num(x, 0))
-        elif c in ["mcap", "revenue", "op_income", "net_income", "planned_value", "day1_value", "day2_value", "day3_value", "revenue_prev_q", "revenue_cur_q", "op_prev_q", "op_cur_q"]:
-            view[c] = view[c].map(fmt_large_krw)
+        base = _report_base_col(c)
+        view[c] = view[c].map(lambda x, b=base: _format_report_cell(b, x))
 
     def esc(x):
         if pd.isna(x):
@@ -2129,39 +2698,25 @@ def dataframe_to_markdown(df: pd.DataFrame, max_rows: int = 30) -> str:
     return "\n".join([header, sep] + rows)
 
 
+def _format_summary_header_html(label: object) -> str:
+    s = str(label)
+    parts = re.split(r"<br\s*/?>", s, maxsplit=1, flags=re.IGNORECASE)
+    if len(parts) == 2:
+        return f"{html.escape(parts[0])}<br><span class=\"ko-label\">{html.escape(parts[1])}</span>"
+    return html.escape(s)
+
+
 def render_html_table(df: pd.DataFrame, title: str) -> str:
     if df.empty:
         return f"<section><h2>{html.escape(title)}</h2><p>없음</p></section>"
 
-    column_desc = {
-        "ticker": "종목코드", "name": "종목명", "action": "권고 액션", "reason": "선정/제외 사유", "target_selection_bucket": "선정 버킷", "score_rebuild_method": "점수 재구성 출처",
-        "score": "최종 점수", "score_adj": "보유 보너스 반영 점수", "hold_bonus_applied": "보유 보너스 적용값", "score_rank": "기본 점수 순위", "quality_soft_penalty_active": "품질 패널티 사용 여부", "quality_penalty_total": "품질 패널티 총합", "penalty_flag": "패널티 적용 여부", "penalty_level": "패널티 강도", "penalty_reason": "패널티 사유 코드", "penalty_desc": "패널티 해설", "industry_code": "업종 코드", "industry_name": "업종명", "mcap_group": "시가총액 그룹", "mcap_rank_pct": "시가총액 백분위", "expectation_overlay_active": "기대반영 오버레이 사용 여부", "expectation_score": "기대반영 점수", "expectation_penalty": "기대반영 보정치",
-        "year": "최근 사용 분기 연도", "quarter": "최근 사용 분기",
-        "revenue_prev_q": "직전 단일분기 매출액", "revenue_cur_q": "당기 단일분기 매출액", "revenue_qoq": "단일분기 매출 QoQ",
-        "op_prev_q": "직전 단일분기 영업이익", "op_cur_q": "당기 단일분기 영업이익", "op_qoq": "단일분기 영업이익 QoQ",
-        "revenue": "TTM 매출액", "op_income": "TTM 영업이익", "net_income": "TTM 순이익",
-        "op_acc2": "영업이익 가속도", "op_acc2_log1p": "로그 완화 영업이익 가속도", "contrib_op": "영업이익 가속 기여도", "contrib_op_log": "로그 완화 영업이익 가속 기여도", "op_growth_streak2": "영업이익 2분기 연속 개선 더미", "contrib_op_streak": "영업이익 연속개선 기여도", "rev_acc2": "매출 가속도", "rev_acc2_log1p": "로그 완화 매출 가속도", "contrib_rev": "매출 가속 기여도", "contrib_rev_log": "로그 완화 매출 가속 기여도", "rev_growth_streak2": "매출 2분기 연속 증가 더미", "contrib_rev_streak": "매출 연속증가 기여도", "debt_log": "부채비율 로그값", "contrib_debt": "부채 요인 기여도",
-        "cfo_to_assets": "CFO/Assets 품질 팩터", "cfo_isnull": "CFO 결측 더미",
-        "price": "현재가", "mcap": "시가총액", "per": "PER", "pbr": "PBR", "psr": "PSR", "ev_ebit": "EV Proxy/EBIT", "ev_ebitda": "EV Proxy/EBITDA", "cohort_status": "타깃 코호트 포함 상태", "score_availability_reason": "점수 가용 사유", "planned_qty": "총 계획 수량", "planned_value": "총 계획 금액",
-        "day1_qty": "1일차 수량", "day1_value": "1일차 금액", "day2_qty": "2일차 수량", "day2_value": "2일차 금액",
-        "day3_qty": "3일차 수량", "day3_value": "3일차 금액", "est_slippage_bps": "예상 슬리피지(bps)"
-    }
-
     view = df.copy()
     for c in view.columns:
-        if c in [
-            "score", "score_adj", "score_rank", "op_acc2", "op_acc2_log1p", "rev_acc2", "rev_acc2_log1p", "debt_log", "cfo_to_assets", "revenue_qoq", "op_qoq",
-            "per", "pbr", "psr", "ev_ebit", "ev_ebitda", "contrib_op", "contrib_op_log", "contrib_op_streak", "contrib_rev", "contrib_rev_log", "contrib_rev_streak", "contrib_debt",
-            "contrib_cfo", "contrib_missing", "score_rebuilt", "score_diff_vs_reported", "est_slippage_bps", "quality_penalty_total"
-        ]:
-            view[c] = view[c].map(lambda x: fmt_ratio(x, 2))
-        elif c in ["price", "planned_qty", "day1_qty", "day2_qty", "day3_qty", "cfo_isnull", "year", "quarter"]:
-            view[c] = view[c].map(lambda x: fmt_num(x, 0))
-        elif c in ["mcap", "revenue", "op_income", "net_income", "planned_value", "day1_value", "day2_value", "day3_value", "revenue_prev_q", "revenue_cur_q", "op_prev_q", "op_cur_q"]:
-            view[c] = view[c].map(fmt_large_krw)
+        base = _report_base_col(c)
+        view[c] = view[c].map(lambda x, b=base: _format_report_cell(b, x))
 
     cols = list(view.columns)
-    header = "".join(f"<th>{html.escape(str(c))}</th>" for c in cols)
+    header = "".join(f"<th>{_format_summary_header_html(c)}</th>" for c in cols)
     body_rows = []
     for _, row in view.iterrows():
         cells = []
@@ -2174,13 +2729,11 @@ def render_html_table(df: pd.DataFrame, title: str) -> str:
             cells.append(f"<td>{html.escape(s)}</td>")
         body_rows.append("<tr>" + "".join(cells) + "</tr>")
 
-    caption = " | ".join(f"{c}: {column_desc.get(c, c)}" for c in cols)
     return f"""
 <section class="table-section">
   <h2>{html.escape(title)}</h2>
   <div class="table-wrap">
     <table class="summary-table">
-      <caption>{html.escape(caption)}</caption>
       <thead><tr>{header}</tr></thead>
       <tbody>{''.join(body_rows)}</tbody>
     </table>
@@ -2232,6 +2785,120 @@ def _format_multiple_lines(row: pd.Series) -> list[str]:
     return out
 
 
+
+AI_OVERLAY_MULTIPLIERS = [
+    ("profit_accel", "ai_mult_profit_accel", "이익가속 버킷"),
+    ("revenue_support", "ai_mult_revenue_support", "매출 보조 버킷"),
+    ("balance_sheet", "ai_mult_balance_sheet", "재무구조 버킷"),
+    ("op_streak", "ai_mult_op_streak", "분기단위 영업이익 증가 연속성"),
+    ("rev_streak", "ai_mult_rev_streak", "분기단위 매출 증가 연속성"),
+]
+
+
+def _ai_overlay_active_mask(df: pd.DataFrame) -> pd.Series:
+    if df is None or len(df) == 0 or "ai_overlay_active" not in df.columns:
+        return pd.Series(False, index=df.index if isinstance(df, pd.DataFrame) else None)
+    return pd.to_numeric(df["ai_overlay_active"], errors="coerce").fillna(0).gt(0)
+
+
+def _ai_overlay_source_rows(detail: pd.DataFrame | None) -> pd.DataFrame:
+    if detail is None or len(detail) == 0:
+        return pd.DataFrame()
+    d = detail.copy()
+    active = _ai_overlay_active_mask(d)
+    if active.any():
+        return d.loc[active].copy()
+    return d.head(0).copy()
+
+
+def build_ai_overlay_table(detail: pd.DataFrame | None) -> pd.DataFrame:
+    rows = _ai_overlay_source_rows(detail)
+    if rows.empty:
+        return pd.DataFrame(columns=["bucket", "description", "multiplier"])
+
+    out_rows = []
+    for bucket, col, desc in AI_OVERLAY_MULTIPLIERS:
+        if col not in rows.columns:
+            continue
+        vals = pd.to_numeric(rows[col], errors="coerce").dropna()
+        if len(vals) == 0:
+            continue
+        # AI bucket overlay는 런타임 전체에 공통 적용되는 값이므로 대표값은 median으로 표시한다.
+        out_rows.append({
+            "bucket": bucket,
+            "description": desc,
+            "multiplier": float(vals.median()),
+        })
+    return pd.DataFrame(out_rows)
+
+
+def build_ai_overlay_md_block(detail: pd.DataFrame | None) -> list[str]:
+    tbl = build_ai_overlay_table(detail)
+    if tbl.empty:
+        return [
+            "### 3.5 팩터별 AI 가중치 조정(AI Bucket Overlay)",
+            "",
+            "- AI Bucket Overlay: **비활성 또는 런타임 데이터 없음**",
+            "",
+        ]
+
+    view = tbl.copy()
+    view["multiplier"] = view["multiplier"].map(lambda x: fmt_ratio(x, 4))
+    view = view.rename(columns={
+        "bucket": "bucket<br>(버킷)",
+        "description": "description<br>(설명)",
+        "multiplier": "multiplier<br>(조정계수)",
+    })
+    return [
+        "### 3.5 팩터별 AI 가중치 조정(AI Bucket Overlay)",
+        "",
+        "AI Bucket Overlay는 종목별 고유 정보가 아니라 이번 런타임에서 공통 적용된 factor bucket 조정계수입니다.",
+        "따라서 종목 상세표 반복 표시 대신 이 섹션에서 한 번만 표시합니다.",
+        "",
+        dataframe_to_markdown(view, max_rows=len(view)),
+        "",
+    ]
+
+
+def build_ai_overlay_html(detail: pd.DataFrame | None) -> str:
+    tbl = build_ai_overlay_table(detail)
+    if tbl.empty:
+        return """
+<section>
+  <h3>3.5 팩터별 AI 가중치 조정(AI Bucket Overlay)</h3>
+  <p>AI Bucket Overlay: <strong>비활성 또는 런타임 데이터 없음</strong></p>
+</section>
+"""
+
+    view = tbl.copy()
+    view["multiplier"] = view["multiplier"].map(lambda x: fmt_ratio(x, 4))
+    header = "".join([
+        '<th>bucket<br><span class="ko-label">(버킷)</span></th>',
+        '<th>description<br><span class="ko-label">(설명)</span></th>',
+        '<th>multiplier<br><span class="ko-label">(조정계수)</span></th>',
+    ])
+    body = []
+    for _, row in view.iterrows():
+        body.append(
+            "<tr>"
+            f"<td>{html.escape(text_or_dash(row.get('bucket')))}</td>"
+            f"<td>{html.escape(text_or_dash(row.get('description')))}</td>"
+            f"<td>{html.escape(text_or_dash(row.get('multiplier')))}</td>"
+            "</tr>"
+        )
+    return f"""
+<section class="table-section">
+  <h3>3.5 팩터별 AI 가중치 조정(AI Bucket Overlay)</h3>
+  <p>AI Bucket Overlay는 지난 10년 백테스트 결과를 반영해 각 팩터의 가중치를 조정하는 역할을 합니다. 매 분기 변화할 수 있습니다.</p>
+  <div class="table-wrap">
+    <table class="factor-table">
+      <thead><tr>{header}</tr></thead>
+      <tbody>{''.join(body)}</tbody>
+    </table>
+  </div>
+</section>
+"""
+
 def render_detail_card(row: pd.Series) -> str:
     def _maybe(li: list[str], label: str, value: str) -> None:
         if value != "-":
@@ -2239,11 +2906,6 @@ def render_detail_card(row: pd.Series) -> str:
 
     mult_lines = _format_multiple_lines(row)
     mult_html = "<ul>" + "".join(mult_lines) + "</ul>" if mult_lines else "<p>가용 멀티플 데이터 없음</p>"
-
-    industry_name = row.get("report_industry_name")
-    industry_html = ""
-    if pd.notna(industry_name) and str(industry_name) not in ["<NA>", "nan", "None", "-"]:
-        industry_html = f"<li><strong>업종명:</strong> {html.escape(str(industry_name))}</li>"
 
     factor_items: list[str] = []
     for label, key, fmt in [
@@ -2282,29 +2944,20 @@ def render_detail_card(row: pd.Series) -> str:
     <section>
       <h4>기본</h4>
       <ul>
-        {_render_value("액션", str(row.get('action', '-')))}
-        {_render_value("사유", text_or_dash(row.get('reason', '-')))}
-        {_render_value("보고서 SCORE", f"{fmt_ratio(row.get('score'), 4)} / rank {fmt_int_plain(row.get('score_rank'))}")}
-        {_render_value("조정 SCORE", fmt_ratio(row.get('score_adj'), 4))}
-        {_render_value("holding bonus", fmt_ratio(row.get('hold_bonus_applied'), 4))}
-        {_render_value("Quality penalty", fmt_ratio(row.get('quality_penalty_total'), 4))}
-        {_render_value("Penalty level", text_or_dash(row.get('penalty_level')))}
-        {_render_value("Penalty reason", text_or_dash(row.get('penalty_reason')))}
-        {_render_value("Penalty 설명", text_or_dash(row.get('penalty_desc')))}
-        {_render_value("재구성 SCORE", fmt_ratio(row.get('score_rebuilt'), 4))}
-        {_render_value("SCORE 차이", fmt_ratio(row.get('score_diff_vs_reported'), 4))}
-        {_render_value("industry_code", fmt_int_plain(row.get('industry4')))}
-        {_render_value("시가총액 그룹", text_or_dash(row.get('mcap_group', '-')))}
-        {_render_value("시가총액 백분위", fmt_ratio(row.get('mcap_rank_pct'), 4))}
-        {_render_value("Expectation score", fmt_ratio(row.get('expectation_score'), 4))}
-        {_render_value("Expectation penalty", fmt_ratio(row.get('expectation_penalty'), 4))}
-        {industry_html}
-        {_render_value("cohort_status", text_or_dash(row.get('cohort_status', '-')))}
-        {_render_value("score_availability_reason", text_or_dash(row.get('score_availability_reason', '-')))}
-        {_render_value("latest_available_rebalance_month", text_or_dash(row.get('latest_available_rebalance_month', '-')))}
-        {_render_value("latest_available_year/quarter", f"{fmt_int_plain(row.get('latest_available_year'))} / {fmt_int_plain(row.get('latest_available_quarter'))}")}
-        {_render_value("현재가", fmt_num(row.get('report_price'), 0))}
-        {_render_value("시가총액", fmt_large_krw(row.get('report_mcap')))}
+        {_render_value("action(액션)", str(row.get('action', '-')))}
+        {_render_value("reason(사유)", text_or_dash(row.get('reason', '-')))}
+        {_render_value("score_adj_rank(최종순위)", fmt_int_plain(row.get('score_adj_rank')))}
+        {_render_value("score_base(퀀트점수)", fmt_ratio(row.get('score_base'), 4))}
+        {_render_value("quality_penalty_total(품질패널티)", fmt_ratio(row.get('quality_penalty_total'), 4))}
+        {_render_value("score(품질/AI 반영점수)", fmt_ratio(row.get('score'), 4))}
+        {_render_value("hold_bonus(보유보너스)", fmt_ratio(row.get('hold_bonus_applied'), 4))}
+        {_render_value("score_adj(최종점수)", fmt_ratio(row.get('score_adj'), 4))}
+        {_render_value("penalty_level(패널티등급)", text_or_dash(row.get('penalty_level')))}
+        {_render_value("penalty_reason(패널티사유)", text_or_dash(row.get('penalty_reason')))}
+        {_render_value("penalty_desc(패널티설명)", text_or_dash(row.get('penalty_desc')))}
+        {_render_value("industry_name(업종명)", text_or_dash(row.get('report_industry_name')))}
+        {_render_value("price(현재가)", fmt_num(row.get('report_price'), 0))}
+        {_render_value("mcap(시가총액)", fmt_large_krw(row.get('report_mcap')))}
       </ul>
     </section>
     <section>
@@ -2324,6 +2977,14 @@ def render_detail_card(row: pd.Series) -> str:
       </ul>
     </section>
     <section>
+      <h4>최근 3개 분기 추이</h4>
+      <ul>
+        {_render_value("기간", f"{text_or_dash(row.get('period_q2'))} → {text_or_dash(row.get('period_q1'))} → {text_or_dash(row.get('period_q0'))}")}
+        {_render_value("매출", f"{fmt_large_krw(row.get('revenue_q2'))} → {fmt_large_krw(row.get('revenue_q1'))} → {fmt_large_krw(row.get('revenue_q0'))}")}
+        {_render_value("영업이익", f"{fmt_large_krw(row.get('op_q2'))} → {fmt_large_krw(row.get('op_q1'))} → {fmt_large_krw(row.get('op_q0'))}")}
+      </ul>
+    </section>
+    <section>
       <h4>팩터</h4>
       {factor_html}
     </section>
@@ -2335,23 +2996,11 @@ def render_detail_card(row: pd.Series) -> str:
       <h4>멀티플</h4>
       {mult_html}
     </section>
-    <section>
-      <h4>실행 계획</h4>
-      <ul>
-        {_render_value("총 목표 주문수량", f"{fmt_num(row.get('exec__planned_total_qty'), 0)}주")}
-        {_render_value("총 목표 주문금액", fmt_large_krw(row.get('exec__planned_total_value')))}
-        {_render_value("Day1", f"{fmt_num(row.get('exec__day1_qty'), 0)}주 / {fmt_large_krw(row.get('exec__day1_order_value'))}")}
-        {_render_value("Day2", f"{fmt_num(row.get('exec__day2_qty'), 0)}주 / {fmt_large_krw(row.get('exec__day2_order_value'))}")}
-        {_render_value("Day3", f"{fmt_num(row.get('exec__day3_qty'), 0)}주 / {fmt_large_krw(row.get('exec__day3_order_value'))}")}
-        {_render_value("예상 슬리피지", f"{fmt_ratio(row.get('exec__est_slippage_bps'), 3)} bps")}
-      </ul>
-    </section>
   </div>
 </article>
 """
 
-
-def build_html_report(spec: dict, asof: str, target_date: str, strategy: str, buy_tab: pd.DataFrame, sell_tab: pd.DataFrame, hold_tab: pd.DataFrame, buy_df: pd.DataFrame, sell_df: pd.DataFrame, hold_df: pd.DataFrame, perf: dict | None = None, performance_title: str | None = None, report_title: str | None = None) -> str:
+def build_html_report(spec: dict, asof: str, target_date: str, strategy: str, buy_tab: pd.DataFrame, sell_tab: pd.DataFrame, hold_tab: pd.DataFrame, buy_df: pd.DataFrame, sell_df: pd.DataFrame, hold_df: pd.DataFrame, perf: dict | None = None, performance_title: str | None = None, report_title: str | None = None, metric: str | None = None) -> str:
     factor_table = build_factor_note_html(spec)
     buy_cards = "".join(render_detail_card(r) for _, r in buy_df.iterrows()) if not buy_df.empty else "<p>없음</p>"
     sell_cards = "".join(render_detail_card(r) for _, r in sell_df.iterrows()) if not sell_df.empty else "<p>없음</p>"
@@ -2360,11 +3009,14 @@ def build_html_report(spec: dict, asof: str, target_date: str, strategy: str, bu
     score_formula = "<br>".join(html.escape(x) for x in spec["formula_lines"])
     calc_steps = "".join(f"<li>{html.escape(s)}</li>" for s in spec["calc_steps"])
     filters = "".join(f"<li>{html.escape(f)}</li>" for f in spec["filters"])
-
-    note_diff = """
-<p class="note">주: <code>score_rebuilt</code>는 보고서 설명을 위해 현재 보유한 표준화 팩터값으로 재구성한 점수입니다.
-실제 포트폴리오 선별에 사용된 최종 점수와는 전처리·클리핑·제약 적용 차이로 인해 다를 수 있습니다.</p>
-"""
+    detail_for_ai = pd.concat([buy_df, sell_df, hold_df], ignore_index=True) if any(len(x) > 0 for x in [buy_df, sell_df, hold_df]) else pd.DataFrame()
+    ai_overlay_html = build_ai_overlay_html(detail_for_ai)
+    best_strategy_note_html = build_best_strategy_note_html(asof)
+    provisional_meta = load_krx_master_provisional_meta(asof)
+    provisional_html = "Yes" if provisional_meta and provisional_meta.get("provisional") else "No"
+    fallback_html = ""
+    if provisional_meta and provisional_meta.get("provisional"):
+        fallback_html = f'<li><strong>Fallback source:</strong> {html.escape(str(provisional_meta.get("source", "-")))}</li>'
 
     report_title = report_title or "리밸런싱 보고서"
     html_text = f"""<!DOCTYPE html>
@@ -2396,6 +3048,15 @@ code, pre {{ font-family: Consolas, monospace; }}
 .summary-table th, .summary-table td, .factor-table th, .factor-table td {{
   border: 1px solid #e5e7eb; padding: 8px 10px; text-align: left; white-space: nowrap;
 }}
+.summary-table th {{
+  padding: 6px 7px; line-height: 1.15; vertical-align: bottom;
+}}
+.summary-table td {{
+  padding: 6px 7px;
+}}
+.summary-table th .ko-label {{
+  font-size: 12px; color: #475569; font-weight: 600;
+}}
 .summary-table tbody tr:nth-child(even) {{ background: #fafafa; }}
 .card {{
   border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin: 16px 0; background: #fff;
@@ -2421,8 +3082,18 @@ ul {{ margin-top: 6px; }}
     <li><strong>목표 리밸런싱일(target):</strong> {html.escape(target_date)}</li>
     <li><strong>전략명:</strong> {html.escape(strategy)}</li>
     <li><strong>전략 설명:</strong> {html.escape(spec["title"])}</li>
+    <li><strong>Metric:</strong> {html.escape(str(metric or "-"))}</li>
+    <li><strong>Provisional:</strong> {provisional_html}</li>
+    {fallback_html}
+    <li><strong>벤치마크:</strong> KOSDAQ150(229200)</li>
+    <li><strong>Compliance notice:</strong> 본 보고서는 투자판단 보조를 위한 정량 리밸런싱 자료이며, 투자 권유 또는 수익 보장을 목적으로 하지 않습니다.</li>
+    <li><strong>정보의 신뢰성 및 한계:</strong> 이 자료는 신뢰할 수 있는 자료 및 정보로부터 얻은 것이나, 그 정확성이나 완전성을 보장할 수 없으므로 투자 결과에 대한 법적 책임소재의 증빙자료로 사용될 수 없습니다.</li>
+    <li><strong>이해관계 상충 방지:</strong> 자료 작성일 현재 조사분석 대상법인의 지분을 보유하고 있거나, 과거 1년간 해당 법인의 주식을 인수한 사실 등 잠재적인 이해관계가 있을 수 있음을 고지합니다.</li>
+    <li><strong>무단 전재 금지:</strong> 제공된 모든 자료는 작성자의 동의 없이 무단 전재, 배포, 수정할 수 없습니다.</li>
   </ul>
 </div>
+
+{best_strategy_note_html}
 
 {build_performance_html(perf, performance_title)}
 
@@ -2451,20 +3122,14 @@ ul {{ margin-top: 6px; }}
 
 {factor_table}
 
-<h3>3.4 포트폴리오 종목별 SCORE 계산 표시</h3>
-<ul>
-  <li>각 종목에 대해 contrib_op_log / contrib_op_streak / contrib_rev / contrib_rev_streak / contrib_debt / contrib_cfo / contrib_missing와 quality penalty 해설을 별도로 출력합니다.</li>
-  <li>score_rebuilt는 위 기여도를 합산해 재구성한 점수입니다.</li>
-  <li>score_diff_vs_reported는 보고서 score와 재구성 score의 차이입니다.</li>
-</ul>
-{note_diff}
-
-<h3>3.5 필터 / 제약조건</h3>
+<h3>3.4 필터 / 제약조건</h3>
 <ul>{filters}</ul>
+
+{ai_overlay_html}
 
 {render_html_table(buy_tab, "4. BUY 종목 요약표")}
 {render_html_table(sell_tab, "5. SELL 종목 요약표")}
-{render_html_table(hold_tab, "6. REVIEW 종목 요약표")}
+{render_html_table(hold_tab, "6. HOLD/REVIEW 종목 요약표")}
 
 <section>
   <h2>7. BUY 종목 상세</h2>
@@ -2477,7 +3142,7 @@ ul {{ margin-top: 6px; }}
 </section>
 
 <section>
-  <h2>9. REVIEW 종목 상세</h2>
+  <h2>9. HOLD/REVIEW 종목 상세</h2>
   {hold_cards}
 </section>
 </body>
@@ -2489,34 +3154,20 @@ def row_to_markdown_block(row: pd.Series) -> str:
     lines = []
     lines.append(f"### {row.get('report_name', '-')} ({row['ticker']})")
     lines.append("")
-    lines.append(f"- 액션: **{row.get('action', '-')}**")
-    lines.append(f"- 사유: {text_or_dash(row.get('reason', '-'))}")
-    lines.append(f"- 보고서 SCORE: **{fmt_ratio(row.get('score'), 4)}** / rank {fmt_int_plain(row.get('score_rank'))}")
-    lines.append(f"- 조정 SCORE: **{fmt_ratio(row.get('score_adj'), 4)}**")
-    lines.append(f"- holding bonus: {fmt_ratio(row.get('hold_bonus_applied'), 4)}")
-    lines.append(f"- Quality penalty: {fmt_ratio(row.get('quality_penalty_total'), 4)}")
-    lines.append(f"- Penalty level: {text_or_dash(row.get('penalty_level'))}")
-    lines.append(f"- Penalty reason: {text_or_dash(row.get('penalty_reason'))}")
-    lines.append(f"- Penalty 설명: {text_or_dash(row.get('penalty_desc'))}")
-    lines.append(f"- 재구성 SCORE: **{fmt_ratio(row.get('score_rebuilt'), 4)}**")
-    lines.append(f"- SCORE 차이(보고서-재구성): {fmt_ratio(row.get('score_diff_vs_reported'), 4)}")
-    lines.append(f"- industry_code: {text_or_dash(row.get('industry_code'))}")
-    lines.append(f"- 시가총액 그룹: {text_or_dash(row.get('mcap_group'))}")
-    lines.append(f"- 시가총액 백분위: {fmt_ratio(row.get('mcap_rank_pct'), 4)}")
-    lines.append(f"- Expectation score: {fmt_ratio(row.get('expectation_score'), 4)}")
-    lines.append(f"- Expectation penalty: {fmt_ratio(row.get('expectation_penalty'), 4)}")
-    if pd.notna(row.get("report_industry_name")) and str(row.get("report_industry_name")) not in ["<NA>", "nan", "None", "-"]:
-        lines.append(f"- 업종명: {row.get('report_industry_name')}")
-    if pd.notna(row.get("cohort_status")) and str(row.get("cohort_status")) not in ["<NA>", "nan", "None", "-"]:
-        lines.append(f"- cohort_status: {row.get('cohort_status')}")
-    if pd.notna(row.get("score_availability_reason")) and str(row.get("score_availability_reason")) not in ["<NA>", "nan", "None", "-"]:
-        lines.append(f"- score_availability_reason: {row.get('score_availability_reason')}")
-    if pd.notna(row.get("latest_available_rebalance_month")) and str(row.get("latest_available_rebalance_month")) not in ["<NA>", "nan", "None", "-"]:
-        lines.append(f"- latest_available_rebalance_month: {row.get('latest_available_rebalance_month')}")
-    if pd.notna(row.get("latest_available_year")):
-        lines.append(f"- latest_available_year/quarter: {fmt_int_plain(row.get('latest_available_year'))} / {fmt_int_plain(row.get('latest_available_quarter'))}")
-    lines.append(f"- 현재가: {fmt_num(row.get('report_price'), 0)}")
-    lines.append(f"- 시가총액: {fmt_large_krw(row.get('report_mcap'))}")
+    lines.append(f"- action(액션): **{row.get('action', '-')}**")
+    lines.append(f"- reason(사유): {text_or_dash(row.get('reason', '-'))}")
+    lines.append(f"- score_adj_rank(최종순위): {fmt_int_plain(row.get('score_adj_rank'))}")
+    lines.append(f"- score_base(퀀트점수): **{fmt_ratio(row.get('score_base'), 4)}**")
+    lines.append(f"- quality_penalty_total(품질패널티): {fmt_ratio(row.get('quality_penalty_total'), 4)}")
+    lines.append(f"- score(품질/AI 반영점수): **{fmt_ratio(row.get('score'), 4)}**")
+    lines.append(f"- hold_bonus(보유보너스): {fmt_ratio(row.get('hold_bonus_applied'), 4)}")
+    lines.append(f"- score_adj(최종점수): **{fmt_ratio(row.get('score_adj'), 4)}**")
+    lines.append(f"- penalty_level(패널티등급): {text_or_dash(row.get('penalty_level'))}")
+    lines.append(f"- penalty_reason(패널티사유): {text_or_dash(row.get('penalty_reason'))}")
+    lines.append(f"- penalty_desc(패널티설명): {text_or_dash(row.get('penalty_desc'))}")
+    lines.append(f"- industry_name(업종명): {text_or_dash(row.get('report_industry_name'))}")
+    lines.append(f"- price(현재가): {fmt_num(row.get('report_price'), 0)}")
+    lines.append(f"- mcap(시가총액): {fmt_large_krw(row.get('report_mcap'))}")
     lines.append("")
     lines.append("재무:")
     for t in [
@@ -2527,6 +3178,11 @@ def row_to_markdown_block(row: pd.Series) -> str:
     ]:
         if not t.endswith('-'):
             lines.append(t)
+    lines.append("")
+    lines.append("최근 3개 분기 추이:")
+    lines.append(f"- 기간: {text_or_dash(row.get('period_q2'))} → {text_or_dash(row.get('period_q1'))} → {text_or_dash(row.get('period_q0'))}")
+    lines.append(f"- 매출: {fmt_large_krw(row.get('revenue_q2'))} → {fmt_large_krw(row.get('revenue_q1'))} → {fmt_large_krw(row.get('revenue_q0'))}")
+    lines.append(f"- 영업이익: {fmt_large_krw(row.get('op_q2'))} → {fmt_large_krw(row.get('op_q1'))} → {fmt_large_krw(row.get('op_q0'))}")
     lines.append("")
     lines.append("팩터:")
     for label, key, fmt in [
@@ -2540,37 +3196,46 @@ def row_to_markdown_block(row: pd.Series) -> str:
         ("Quality_CFO_to_Assets", 'cfo_to_assets', lambda v: fmt_ratio(v,4)),
         ("CFO_isnull", 'cfo_isnull', lambda v: fmt_num(v,0)),
     ]:
-        s = fmt(row.get(key))
-        if s != '-':
-            lines.append(f"- {label}: {s}")
+        ss = fmt(row.get(key))
+        if ss != '-':
+            lines.append(f"- {label}: {ss}")
     lines.append("")
     lines.append("스코어 기여도:")
     for label, key in [("contrib_op",'contrib_op'),("contrib_op_log",'contrib_op_log'),("contrib_op_streak",'contrib_op_streak'),("contrib_rev",'contrib_rev'),("contrib_rev_log",'contrib_rev_log'),("contrib_rev_streak",'contrib_rev_streak'),("contrib_debt",'contrib_debt'),("contrib_cfo",'contrib_cfo'),("contrib_missing",'contrib_missing')]:
-        s = fmt_ratio(row.get(key),4)
-        if s != '-':
-            lines.append(f"- {label}: {s}")
+        ss = fmt_ratio(row.get(key),4)
+        if ss != '-':
+            lines.append(f"- {label}: {ss}")
     lines.append("")
     mults = []
     for lbl, key in [("PER","per"),("PBR","pbr"),("PSR","psr"),("EV/EBIT","ev_ebit"),("EV/EBITDA","ev_ebitda")]:
-        s = fmt_ratio(row.get(key), 2)
-        if s != "-":
-            mults.append(f"- {lbl}: {s}")
+        ss = fmt_ratio(row.get(key), 2)
+        if ss != "-":
+            mults.append(f"- {lbl}: {ss}")
     lines.append("멀티플:")
     lines.extend(mults if mults else ["- 가용 멀티플 데이터 없음"])
-    lines.append("")
-    lines.append("실행 계획:")
-    for t in [
-        f"- 총 목표 주문수량: {fmt_num(row.get('exec__planned_total_qty'), 0)}주",
-        f"- 총 목표 주문금액: {fmt_large_krw(row.get('exec__planned_total_value'))}",
-        f"- Day1: {fmt_num(row.get('exec__day1_qty'), 0)}주 / {fmt_large_krw(row.get('exec__day1_order_value'))}",
-        f"- Day2: {fmt_num(row.get('exec__day2_qty'), 0)}주 / {fmt_large_krw(row.get('exec__day2_order_value'))}",
-        f"- Day3: {fmt_num(row.get('exec__day3_qty'), 0)}주 / {fmt_large_krw(row.get('exec__day3_order_value'))}",
-        f"- 예상 슬리피지: {fmt_ratio(row.get('exec__est_slippage_bps'), 3)} bps",
-    ]:
-        if not t.endswith('-') and not t.endswith('/ -'):
-            lines.append(t)
     return "\n".join(lines)
 
+def normalize_report_reason(df: pd.DataFrame) -> pd.DataFrame:
+    out = df.copy()
+
+    def _reason(row):
+        action = str(row.get("action", "")).upper()
+        rank = fmt_int_plain(row.get("score_adj_rank"))
+
+        if action == "BUY":
+            return f"전략 신규 편입 (score_adj_rank={rank})"
+        if action == "SELL":
+            return f"전략 탈락 (score_adj_rank={rank})"
+        if action in {"HOLD", "HOLD_REVIEW", "REVIEW"}:
+            bucket = text_or_dash(row.get("selection_bucket"))
+            if bucket == "keep_current_top_n":
+                return f"기존 보유 상위 점수 유지 (score_adj_rank={rank})"
+            return f"전략 유지/점검 (score_adj_rank={rank})"
+        return text_or_dash(row.get("reason"))
+
+    out["raw_reason"] = out.get("reason", pd.NA)
+    out["reason"] = out.apply(_reason, axis=1)
+    return out
 
 def main():
     ap = argparse.ArgumentParser()
@@ -2581,6 +3246,7 @@ def main():
     ap.add_argument("--strategy", required=True)
     ap.add_argument("--asof", required=True)
     ap.add_argument("--target_date", required=True)
+    ap.add_argument("--metric", default=None)
     ap.add_argument("--output_md", required=True)
     ap.add_argument("--output_csv", required=True)
     ap.add_argument("--output_html", default=None)
@@ -2632,15 +3298,21 @@ def main():
         detail = attach_industry(detail, reference_csv=reference_csv, prefer_reference=True)
     except Exception as e:
         print(f"[WARN] attach_industry final failed: {e}")
+    detail = merge_universe_meta(detail, asof=args.asof)
+    detail = normalize_report_metadata(detail)
     detail = add_derived_valuations(detail)
     strategy_cfg = load_strategy_config(args.strategy)
     detail = add_score_breakdown(detail, args.strategy, strategy_cfg=strategy_cfg)
     detail = add_quality_penalty_info(detail)
-
-    # ?? C: ?? ??? ???? ??? industry_code -> industry_name ???? ??
     detail = enforce_industry_name_from_code(detail, reference_csv=reference_csv)
+    detail = normalize_report_metadata(detail)
+    detail = normalize_runtime_ai_overlay_for_report(detail)
+    detail = normalize_report_reason(detail)
+    buy_df = detail[detail["action"] == "BUY"].copy().sort_values(["score_adj_rank", "score_adj"], ascending=[True, False], na_position="last")
 
     spec = get_score_spec(args.strategy, strategy_cfg=strategy_cfg)
+    spec = apply_runtime_overlay_notes(spec, detail)
+    spec = clean_report_scoring_note(spec)
 
     auto_build_performance_summary(
         args.performance_summary,
@@ -2651,7 +3323,6 @@ def main():
     perf = enrich_performance_with_names(perf, detail)
     perf_summary_df, perf_daily_df, perf_contrib_df = make_performance_snapshot_tables(perf)
 
-    buy_df = detail[detail["action"] == "BUY"].copy().sort_values(["score_rank", "score"], ascending=[True, False], na_position="last")
     sell_df = detail[detail["action"] == "SELL"].copy().sort_values(["ticker"])
     hold_df = detail[detail["action"].isin(["HOLD", "HOLD_REVIEW", "REVIEW"])].copy().sort_values(["ticker"])
 
@@ -2714,9 +3385,21 @@ def main():
     md.append(f"- 보고서 제목: **{args.report_title}**")
     md.append(f"- 기준일(asof): **{args.asof}**")
     md.append(f"- 목표 리밸런싱일(target): **{args.target_date}**")
+    provisional_meta = load_krx_master_provisional_meta(args.asof)
     md.append(f"- 전략명: **{args.strategy}**")
     md.append(f"- 전략 설명: **{spec['title']}**")
-    md.append(f"- 점수 재구성 원칙: **exact score csv 우선, 없으면 feature 기반 근사 재구성**")
+    md.append(f"- metric: **{args.metric or '-'}**")
+    md.append(f"- provisional: **{'Yes' if provisional_meta and provisional_meta.get('provisional') else 'No'}**")
+    if provisional_meta and provisional_meta.get("provisional"):
+        md.append(f"- fallback source: **{provisional_meta.get('source', '-')}**")
+        md.append("- provisional 안내: **KRX master 정상 수집 후 동일 명령으로 재실행해 결과를 재검증해야 합니다.**")
+    md.append("- 벤치마크: **KOSDAQ150(229200)**")
+    md.extend(build_best_strategy_note_markdown(args.asof))
+    md.extend(build_strategy_alias_note(args.strategy))
+    md.append("- Compliance notice: **본 보고서는 투자판단 보조를 위한 정량 리밸런싱 자료이며, 투자 권유 또는 수익 보장을 목적으로 하지 않습니다.**")
+    md.append("- 정보의 신뢰성 및 한계: **자료의 정확성이나 완전성을 보장할 수 없으며 투자 결과에 대한 법적 책임소재의 증빙자료로 사용할 수 없습니다.**")
+    md.append("- 이해관계 상충 방지: **자료 작성일 현재 조사분석 대상법인의 지분 보유 등 잠재적 이해관계가 있을 수 있음을 고지합니다.**")
+    md.append("- 무단 전재 금지: **작성자의 동의 없이 무단 전재, 배포, 수정할 수 없습니다.**")
     md.append("")
     if perf:
         md.append(f"## 0. {args.performance_title}")
@@ -2726,7 +3409,7 @@ def main():
         md.append(dataframe_to_markdown_performance(perf_summary_df))
         md.append("")
         if not perf_daily_df.empty:
-            md.append("### 0.2 최근 일별 NAV / 수익률")
+            md.append("### 0.2 리밸런싱 이후 주간 NAV / 수익률")
             md.append("")
             md.append(dataframe_to_markdown_performance(perf_daily_df))
             md.append("")
@@ -2771,17 +3454,12 @@ def main():
     for k, v in spec.get("factor_notes", {}).items():
         md.append(f"- **{k}**: {v}")
     md.append("")
-    md.append("### 3.4 포트폴리오 종목별 SCORE 계산 표시")
-    md.append("")
-    md.append("- 각 종목에 대해 contrib_op_log / contrib_op_streak / contrib_rev / contrib_rev_streak / contrib_debt / contrib_cfo / contrib_missing와 quality penalty 해설을 별도로 출력합니다.")
-    md.append("- score_rebuilt는 가능한 경우 score_latest_rebalance의 실제 factor contribution을 합산한 값입니다.")
-    md.append("- exact scoring source를 찾지 못한 경우에만 feature 기반 근사 재구성을 사용합니다.")
-    md.append("")
-    md.append("### 3.5 필터 / 제약조건")
+    md.append("### 3.4 필터 / 제약조건")
     md.append("")
     for f in spec["filters"]:
         md.append(f"- {f}")
     md.append("")
+    md.extend(build_ai_overlay_md_block(detail))
     md.append("## 4. BUY 종목 요약표")
     md.append("")
     md.append(dataframe_to_markdown(buy_tab))
@@ -2790,7 +3468,7 @@ def main():
     md.append("")
     md.append(dataframe_to_markdown(sell_tab))
     md.append("")
-    md.append("## 6. REVIEW 종목 요약표")
+    md.append("## 6. HOLD/REVIEW 종목 요약표")
     md.append("")
     md.append(dataframe_to_markdown(hold_tab))
     md.append("")
@@ -2811,7 +3489,7 @@ def main():
             md.append(row_to_markdown_block(row))
             md.append("")
 
-    md.append("## 9. REVIEW 종목 상세")
+    md.append("## 9. HOLD/REVIEW 종목 상세")
     md.append("")
     if hold_df.empty:
         md.append("_없음_")
@@ -2838,6 +3516,7 @@ def main():
             perf=perf,
             performance_title=args.performance_title,
             report_title=args.report_title,
+            metric=args.metric,
         )
         write_text(output_html_path, html_text)
 
