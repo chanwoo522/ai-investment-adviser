@@ -205,6 +205,9 @@ The dedicated wrapper for the current main live strategy candidate is:
 Guide:
 
 - [docs/run_factor_composite_pipeline.md](docs/run_factor_composite_pipeline.md)
+- [docs/operations_quarterly_rebalance.md](docs/operations_quarterly_rebalance.md)
+- [docs/data_integrity_todo.md](docs/data_integrity_todo.md)
+- [docs/live_performance_tracking.md](docs/live_performance_tracking.md)
 
 Reproduction record for the current provisional build:
 
