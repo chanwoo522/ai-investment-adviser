@@ -2,11 +2,7 @@ param(
     [ValidateSet("fast","smart","refresh","dryrun")]
     [string]$Mode = "smart",
 
-<<<<<<< HEAD
-    [string]$ASOF = "2026-03-29",
-=======
-    [string]$ASOF = "2026-04-20",
->>>>>>> 09e60c16 (feat: live rebalance pipeline cleanup + reporting system stabilization)
+    [string]$ASOF = "2026-04-15",
     [string]$TARGET = "2026-03-31",
     [string]$METRIC = "revenue_op",
     [string]$STRAT = "D_quality_filter_debt_profitaccel_liq",
@@ -18,10 +14,7 @@ param(
 
     [int]$McapTop = 800,
     [double]$TrdBot = 0.1,
-<<<<<<< HEAD
-=======
     [int]$K = 10,
->>>>>>> 09e60c16 (feat: live rebalance pipeline cleanup + reporting system stabilization)
 
     [int]$PX_V = 1,
     [int]$RET_V = 1,
@@ -34,13 +27,30 @@ param(
     [double]$TOTAL_VALUE = 100000000,
     [string]$HOLDINGS_CSV = "",
 
+    # Performance evaluation based on an actual holdings snapshot.
+    # PowerShell-style name is PerfHoldingsCsv; legacy CLI alias -PERF_HOLDINGS_CSV is preserved.
+    [Alias("PERF_HOLDINGS_CSV")]
+    [string]$PerfHoldingsCsv = "",
+    [Alias("PREV_REBAL_DATE")]
+    [string]$PrevRebalDate = "",
+    [string]$PerfStartDate = "",
+    [ValidateSet("total","invested")]
+    [string]$PerfCapitalMode = "total",
+
     [switch]$ProtectHoldings,
     [switch]$SkipExecutionPlan,
     [switch]$SkipReport,
     [switch]$SkipPerformance,
     [string]$PerformanceEndDate = "",
     [string]$BenchmarkName = "KOSDAQ150",
-    [string]$BenchmarkTicker = "229200"
+    [string]$BenchmarkTicker = "229200",
+
+    # Optional AI factor-weight overlay. Leave AI_MODEL_PATH empty for pure rule-based scoring.
+    [string]$AI_MODEL_PATH = "",
+    [int]$AI_RAW_PX_V = 1,
+    [double]$AI_TEMPERATURE = 1.0,
+    [double]$AI_CAP_PROFIT_ACCEL_DELTA = -1.0,
+    [double]$AI_OVERLAY_STRENGTH = 1.0
 )
 
 $ErrorActionPreference = "Stop"
@@ -72,7 +82,16 @@ function Find-FirstExisting([string[]]$Paths) {
 }
 
 function To-Date([string]$Ymd) {
-    return [datetime]::ParseExact($Ymd, 'yyyy-MM-dd', $null)
+    if([string]::IsNullOrWhiteSpace($Ymd)){ throw "date value is empty" }
+    $s = $Ymd.Trim()
+    if($s -match '^\d{8}$'){
+        return [datetime]::ParseExact($s, 'yyyyMMdd', $null)
+    }
+    return [datetime]::ParseExact($s, 'yyyy-MM-dd', $null)
+}
+
+function To-IsoDate([string]$Ymd) {
+    return (To-Date $Ymd).ToString('yyyy-MM-dd')
 }
 
 function Get-TaggedVersion([string]$Name) {
@@ -106,25 +125,32 @@ function Find-LatestMatchingFile {
 
 function Find-ProcessedByPrefixAsOf {
     param([string]$Prefix,[string]$AsOf,[string]$Ext = "parquet")
-    $pat1 = "$Prefix" + "__asof=${AsOf}__*.$Ext"
-    $x = Find-LatestMatchingFile -Directory (Join-Path $script:DataRootAbs "processed") -Pattern $pat1
-    if($x){ return $x }
-    $pat2 = "$Prefix" + "__asof=$AsOf`_*.$Ext"
-    $x = Find-LatestMatchingFile -Directory (Join-Path $script:DataRootAbs "processed") -Pattern $pat2
-    if($x){ return $x }
+    $dir = Join-Path $script:DataRootAbs "processed"
+
+    # Some processed files place __asof=... immediately after the prefix
+    # (e.g. fundamentals_quarterly__asof=...), while price files may include
+    # source/start tokens before __asof (e.g. prices_daily__src=...__start=...__asof=...).
+    # Search both shapes, preferring exact prefix matches and latest version.
+    $patterns = @(
+        ("$Prefix" + "__asof=${AsOf}__*.$Ext"),
+        ("$Prefix" + "__asof=$AsOf`_*.$Ext"),
+        ("$Prefix" + "*__asof=${AsOf}__*.$Ext"),
+        ("$Prefix" + "*__asof=$AsOf`_*.$Ext")
+    )
+
+    foreach($pat in $patterns){
+        $x = Find-LatestMatchingFile -Directory $dir -Pattern $pat
+        if($x){ return $x }
+    }
     return $null
 }
 
 function Find-Holdings {
     param([string]$Explicit)
     if($Explicit -and (Test-Path $Explicit)){ return (Resolve-Path $Explicit).Path }
-<<<<<<< HEAD
-    $paths = @(
-=======
 
     $paths = @(
         ".\data\portfolio\current\20260330_holdings_clean.csv",
->>>>>>> 09e60c16 (feat: live rebalance pipeline cleanup + reporting system stabilization)
         ".\current_portfolio\20260314_holdings_clean_manual.csv",
         ".\data\portfolio\current\current_holdings.csv",
         ".\data\processed\current_holdings_manual.csv",
@@ -132,10 +158,6 @@ function Find-Holdings {
         ".\data\processed\empty_holdings.csv"
     )
     $p = Find-FirstExisting -Paths $paths
-<<<<<<< HEAD
-    if($null -eq $p){ throw "No holdings csv found." }
-    return $p
-=======
     if($null -ne $p){ return $p }
 
     $candDir = ".\data\portfolio\current"
@@ -148,7 +170,6 @@ function Find-Holdings {
     }
 
     throw "No holdings csv found."
->>>>>>> 09e60c16 (feat: live rebalance pipeline cleanup + reporting system stabilization)
 }
 
 function Find-ExecutionConfig {
@@ -222,7 +243,9 @@ function Stage-Artifact {
         Write-Host "[DRYRUN][stage] $SourcePath -> $dest"
         return $dest
     }
-    Copy-Item -LiteralPath $SourcePath -Destination $dest -Force
+    if ($SourcePath -ne $dest) {
+        Copy-Item -LiteralPath $SourcePath -Destination $dest -Force
+    }
     return $dest
 }
 
@@ -291,7 +314,7 @@ function Write-CycleManifest {
         prices_daily = $PricesDaily
         total_capital = $TotalValue
         created_at = (Get-Date).ToString("s")
-        status = if($Scope -eq "production") { "active" } else { "reference_only" }
+        status = if($Scope -eq "production") { "active" } else { "sandbox_completed" }
     }
     ($obj | ConvertTo-Json -Depth 4) | Set-Content -Path $p -Encoding UTF8
     return $p
@@ -314,6 +337,11 @@ Ensure-Dir (Join-Path $script:DataRootAbs "processed")
 Ensure-Dir (Join-Path $script:DataRootAbs "processed\benchmarks")
 
 $holdings = Find-Holdings -Explicit $HOLDINGS_CSV
+$perfHoldings = ""
+if(-not [string]::IsNullOrWhiteSpace($PerfHoldingsCsv)){
+    Assert-PathExists -Path $PerfHoldingsCsv -Label "PerfHoldingsCsv"
+    $perfHoldings = (Resolve-Path $PerfHoldingsCsv).Path
+}
 $config = Find-ExecutionConfig
 $IsDryRun = ($Mode -eq "dryrun")
 
@@ -321,7 +349,8 @@ Write-Host "=== SMART LIVE REBALANCE START ==="
 Write-Host "Mode=$Mode Scope=$RunScope ASOF=$ASOF TARGET=$TARGET METRIC=$METRIC STRAT=$STRAT"
 Write-Host "[INFO] run_root  : $RunRoot"
 Write-Host "[INFO] python    : $script:PY"
-Write-Host "[INFO] holdings  : $holdings"
+Write-Host "[INFO] holdings       : $holdings"
+if($perfHoldings){ Write-Host "[INFO] perf_holdings  : $perfHoldings" }
 
 $fundExact = Find-ProcessedByPrefixAsOf -Prefix "fundamentals_quarterly" -AsOf $ASOF -Ext "parquet"
 $marketExact = Find-ProcessedByPrefixAsOf -Prefix "krx_marketdata" -AsOf $ASOF -Ext "parquet"
@@ -350,11 +379,11 @@ if($needPrepare){
 Run-Step -Label "build_universe" -ScriptPath ".\scripts\data_pipeline\build_universe.py" -StepArgs @("--asof",$ASOF,"--mcap_top",$McapTop,"--trd_bot",$TrdBot) -DryRun:$IsDryRun
 Run-Step -Label "build_factors" -ScriptPath ".\scripts\data_pipeline\build_factors_ttm_acc2.py" -StepArgs @("--asof",$ASOF,"--metric",$METRIC,"--input_parquet",$fundExact,"--out_v",$FACTOR_V) -DryRun:$IsDryRun
 Run-Step -Label "make_features_live" -ScriptPath ".\scripts\data_pipeline\make_features_live.py" -StepArgs @("--asof",$ASOF,"--metric",$METRIC,"--in_v",$FACTOR_V,"--out_v",$FEAT_V,"--save_meta") -DryRun:$IsDryRun
-<<<<<<< HEAD
-Run-Step -Label "score_latest_rebalance" -ScriptPath ".\scripts\live\score_latest_rebalance.py" -StepArgs @("--asof",$ASOF,"--metric",$METRIC,"--feat_v",$FEAT_V,"--strategy",$STRAT,"--target_date",$TARGET,"--holdings_csv",$holdings) -DryRun:$IsDryRun
-=======
-Run-Step -Label "score_latest_rebalance" -ScriptPath ".\scripts\live\score_latest_rebalance.py" -StepArgs @("--asof",$ASOF,"--metric",$METRIC,"--feat_v",$FEAT_V,"--strategy",$STRAT,"--k",$K,"--target_date",$TARGET,"--holdings_csv",$holdings) -DryRun:$IsDryRun
->>>>>>> 09e60c16 (feat: live rebalance pipeline cleanup + reporting system stabilization)
+$scoreArgs = @("--asof",$ASOF,"--metric",$METRIC,"--feat_v",$FEAT_V,"--strategy",$STRAT,"--k",$K,"--target_date",$TARGET,"--holdings_csv",$holdings)
+if(-not [string]::IsNullOrWhiteSpace($AI_MODEL_PATH)){
+    $scoreArgs += @("--ai_model_path",$AI_MODEL_PATH,"--ai_raw_px_v",$AI_RAW_PX_V,"--ai_temperature",$AI_TEMPERATURE,"--ai_cap_profit_accel_delta",$AI_CAP_PROFIT_ACCEL_DELTA,"--ai_overlay_strength",$AI_OVERLAY_STRENGTH)
+}
+Run-Step -Label "score_latest_rebalance" -ScriptPath ".\scripts\live\score_latest_rebalance.py" -StepArgs $scoreArgs -DryRun:$IsDryRun
 Run-Step -Label "generate_live_actions" -ScriptPath ".\scripts\live\generate_live_actions.py" -StepArgs @("--asof",$ASOF,"--metric",$METRIC,"--strategy",$STRAT,"--feat_v",$FEAT_V,"--target_date",$TARGET,"--holdings_csv",$holdings,"--out_v",$ACTION_V,"--save_candidates") -DryRun:$IsDryRun
 
 $legacyActionsCsv = Join-Path (Join-Path $script:DataRootAbs "live\actions") "live_actions__asof=${ASOF}__metric=${METRIC}__strat=${STRAT}__target=${TARGET}__v=${ACTION_V}.csv"
@@ -389,25 +418,69 @@ $prevPerfContrib = $null
 $prevPerfTitle = "직전 리밸런싱 이후 성과 평가"
 
 if(-not $SkipPerformance){
-    $prevCycle = Find-PreviousCycle -CurrentTarget $TARGET -Metric $METRIC -Strategy $STRAT -TotalValue $TOTAL_VALUE -Scope $RunScope
-    if($prevCycle){
-        $prevTargetDt = To-Date $prevCycle.Target
-        $evalEndDt = To-Date $perfEvalEnd
-        if($evalEndDt -ge $prevTargetDt -and $pricesExact -and $prevCycle.ExecPlan){
-            $prevTag = Build-PerformanceTag -AsOf $prevCycle.AsOf -Target $prevCycle.Target -Version $prevCycle.V -EvalEnd $perfEvalEnd
-            $prevBenchCsv = Join-Path (Join-Path $script:DataRootAbs "processed\benchmarks") "benchmark_${benchTag}__start=$($prevCycle.Target)__end=${perfEvalEnd}.csv"
-            $prevPerfDir = Join-Path $prevCycle.RunRoot "performance"
-            Ensure-Dir $prevPerfDir
-            $prevPerfSummary = Join-Path $prevPerfDir "live_performance_summary__${prevTag}.json"
-            $prevPerfDaily = Join-Path $prevPerfDir "live_performance_daily__${prevTag}.csv"
-            $prevPerfContrib = Join-Path $prevPerfDir "live_contribution__${prevTag}.csv"
+    # 1) Preferred mode: evaluate an actual holdings snapshot.
+    # This is safe for sandbox/smoke tests because it does not use the newly generated action/execution plan.
+    if($perfHoldings){
+        if(-not $pricesExact){ throw "prices_daily parquet is required for holdings performance evaluation." }
 
-            if($IsDryRun){
-                Run-Step -Label "build_benchmark_previous" -ScriptPath ".\scripts\live\build_benchmark_kosdaq150.py" -StepArgs @("--start",$prevCycle.Target,"--end",$perfEvalEnd,"--ticker",$BenchmarkTicker,"--benchmark_name",$BenchmarkName,"--output_csv",$prevBenchCsv) -Optional -DryRun:$true
-                Run-Step -Label "calc_previous_live_performance" -ScriptPath ".\scripts\live\calc_live_performance.py" -StepArgs @("--execution_plan",$prevCycle.ExecPlan,"--prices_daily",$pricesExact,"--total_capital",$TOTAL_VALUE,"--target_date",$prevCycle.Target,"--end_date",$perfEvalEnd,"--benchmark",$prevBenchCsv,"--output_dir",$prevPerfDir,"--tag",$prevTag) -Optional -DryRun:$true
-            } elseif(-not (Test-Path $prevPerfSummary)) {
-                Run-Step -Label "build_benchmark_previous" -ScriptPath ".\scripts\live\build_benchmark_kosdaq150.py" -StepArgs @("--start",$prevCycle.Target,"--end",$perfEvalEnd,"--ticker",$BenchmarkTicker,"--benchmark_name",$BenchmarkName,"--output_csv",$prevBenchCsv) -Optional
-                Run-Step -Label "calc_previous_live_performance" -ScriptPath ".\scripts\live\calc_live_performance.py" -StepArgs @("--execution_plan",$prevCycle.ExecPlan,"--prices_daily",$pricesExact,"--total_capital",$TOTAL_VALUE,"--target_date",$prevCycle.Target,"--end_date",$perfEvalEnd,"--benchmark",$prevBenchCsv,"--output_dir",$prevPerfDir,"--tag",$prevTag) -Optional
+        $perfStartRaw = if(-not [string]::IsNullOrWhiteSpace($PerfStartDate)){
+            $PerfStartDate
+        } elseif(-not [string]::IsNullOrWhiteSpace($PrevRebalDate)){
+            $PrevRebalDate
+        } else {
+            $TARGET
+        }
+        $perfStart = To-IsoDate $perfStartRaw
+        $perfEvalEndIso = To-IsoDate $perfEvalEnd
+
+        $perfStartDt = To-Date $perfStart
+        $evalEndDt = To-Date $perfEvalEndIso
+        if($evalEndDt -lt $perfStartDt){
+            throw "performance end date must be >= start date: start=$perfStart end=$perfEvalEndIso"
+        }
+
+        $prevTag = Build-PerformanceTag -AsOf $ASOF -Target $perfStart -Version $REPORT_V -EvalEnd $perfEvalEndIso
+        $prevBenchCsv = Join-Path (Join-Path $script:DataRootAbs "processed\benchmarks") "benchmark_${benchTag}__start=${perfStart}__end=${perfEvalEndIso}.csv"
+        $prevPerfDir = $Dirs.performance
+        Ensure-Dir $prevPerfDir
+
+        $prevPerfSummary = Join-Path $prevPerfDir "live_performance_summary__${prevTag}.json"
+        $prevPerfDaily = Join-Path $prevPerfDir "live_performance_daily__${prevTag}.csv"
+        $prevPerfContrib = Join-Path $prevPerfDir "live_contribution__${prevTag}.csv"
+        $prevPerfTitle = "직전 리밸런싱 이후 성과 평가 (실제 보유 스냅샷 기준)"
+
+        if($IsDryRun){
+            Run-Step -Label "build_benchmark_holdings_performance" -ScriptPath ".\scripts\live\build_benchmark_kosdaq150.py" -StepArgs @("--start",$perfStart,"--end",$perfEvalEndIso,"--ticker",$BenchmarkTicker,"--benchmark_name",$BenchmarkName,"--output_csv",$prevBenchCsv) -Optional -DryRun:$true
+            Run-Step -Label "calc_holdings_live_performance" -ScriptPath ".\scripts\live\calc_live_performance.py" -StepArgs @("--holdings_csv",$perfHoldings,"--prices_daily",$pricesExact,"--total_capital",$TOTAL_VALUE,"--capital_mode",$PerfCapitalMode,"--target_date",$perfStart,"--end_date",$perfEvalEndIso,"--benchmark",$prevBenchCsv,"--benchmark_name",$BenchmarkName,"--output_dir",$prevPerfDir,"--tag",$prevTag) -DryRun:$true
+        } elseif(-not (Test-Path $prevPerfSummary)) {
+            Run-Step -Label "build_benchmark_holdings_performance" -ScriptPath ".\scripts\live\build_benchmark_kosdaq150.py" -StepArgs @("--start",$perfStart,"--end",$perfEvalEndIso,"--ticker",$BenchmarkTicker,"--benchmark_name",$BenchmarkName,"--output_csv",$prevBenchCsv) -Optional
+            Run-Step -Label "calc_holdings_live_performance" -ScriptPath ".\scripts\live\calc_live_performance.py" -StepArgs @("--holdings_csv",$perfHoldings,"--prices_daily",$pricesExact,"--total_capital",$TOTAL_VALUE,"--capital_mode",$PerfCapitalMode,"--target_date",$perfStart,"--end_date",$perfEvalEndIso,"--benchmark",$prevBenchCsv,"--benchmark_name",$BenchmarkName,"--output_dir",$prevPerfDir,"--tag",$prevTag)
+        } else {
+            Write-Host "[INFO] performance already exists: $prevPerfSummary"
+        }
+    }
+    # 2) Legacy fallback: evaluate the previous production/sandbox cycle execution_plan only when no holdings snapshot is provided.
+    else {
+        $prevCycle = Find-PreviousCycle -CurrentTarget $TARGET -Metric $METRIC -Strategy $STRAT -TotalValue $TOTAL_VALUE -Scope $RunScope
+        if($prevCycle){
+            $prevTargetDt = To-Date $prevCycle.Target
+            $evalEndDt = To-Date $perfEvalEnd
+            if($evalEndDt -ge $prevTargetDt -and $pricesExact -and $prevCycle.ExecPlan){
+                $prevTag = Build-PerformanceTag -AsOf $prevCycle.AsOf -Target $prevCycle.Target -Version $prevCycle.V -EvalEnd $perfEvalEnd
+                $prevBenchCsv = Join-Path (Join-Path $script:DataRootAbs "processed\benchmarks") "benchmark_${benchTag}__start=$($prevCycle.Target)__end=${perfEvalEnd}.csv"
+                $prevPerfDir = Join-Path $prevCycle.RunRoot "performance"
+                Ensure-Dir $prevPerfDir
+                $prevPerfSummary = Join-Path $prevPerfDir "live_performance_summary__${prevTag}.json"
+                $prevPerfDaily = Join-Path $prevPerfDir "live_performance_daily__${prevTag}.csv"
+                $prevPerfContrib = Join-Path $prevPerfDir "live_contribution__${prevTag}.csv"
+
+                if($IsDryRun){
+                    Run-Step -Label "build_benchmark_previous" -ScriptPath ".\scripts\live\build_benchmark_kosdaq150.py" -StepArgs @("--start",$prevCycle.Target,"--end",$perfEvalEnd,"--ticker",$BenchmarkTicker,"--benchmark_name",$BenchmarkName,"--output_csv",$prevBenchCsv) -Optional -DryRun:$true
+                    Run-Step -Label "calc_previous_live_performance" -ScriptPath ".\scripts\live\calc_live_performance.py" -StepArgs @("--execution_plan",$prevCycle.ExecPlan,"--prices_daily",$pricesExact,"--total_capital",$TOTAL_VALUE,"--target_date",$prevCycle.Target,"--end_date",$perfEvalEnd,"--benchmark",$prevBenchCsv,"--benchmark_name",$BenchmarkName,"--output_dir",$prevPerfDir,"--tag",$prevTag) -Optional -DryRun:$true
+                } elseif(-not (Test-Path $prevPerfSummary)) {
+                    Run-Step -Label "build_benchmark_previous" -ScriptPath ".\scripts\live\build_benchmark_kosdaq150.py" -StepArgs @("--start",$prevCycle.Target,"--end",$perfEvalEnd,"--ticker",$BenchmarkTicker,"--benchmark_name",$BenchmarkName,"--output_csv",$prevBenchCsv) -Optional
+                    Run-Step -Label "calc_previous_live_performance" -ScriptPath ".\scripts\live\calc_live_performance.py" -StepArgs @("--execution_plan",$prevCycle.ExecPlan,"--prices_daily",$pricesExact,"--total_capital",$TOTAL_VALUE,"--target_date",$prevCycle.Target,"--end_date",$perfEvalEnd,"--benchmark",$prevBenchCsv,"--benchmark_name",$BenchmarkName,"--output_dir",$prevPerfDir,"--tag",$prevTag) -Optional
+                }
             }
         }
     }

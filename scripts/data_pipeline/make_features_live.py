@@ -377,25 +377,46 @@ def _add_quarterly_snapshot_from_fundamentals(df: pd.DataFrame, p_fq: Path) -> d
     denom_op = fq["op_prev_q"].abs().replace(0.0, np.nan)
     fq["op_qoq"] = (fq["op_cur_q"] - fq["op_prev_q"]) / denom_op
 
+    # Report/explainability trend columns: latest three single-quarter values.
+    # q2 = two quarters before current row, q1 = previous quarter, q0 = current row.
+    fq["period_q0"] = fq["year"].astype(str) + "Q" + fq["quarter"].astype(str)
+    fq["period_q1"] = fq.groupby(TICKER_COL)["period_q0"].shift(1)
+    fq["period_q2"] = fq.groupby(TICKER_COL)["period_q0"].shift(2)
+    fq["revenue_q0"] = fq["Revenue"]
+    fq["revenue_q1"] = fq.groupby(TICKER_COL)["Revenue"].shift(1)
+    fq["revenue_q2"] = fq.groupby(TICKER_COL)["Revenue"].shift(2)
+    fq["op_q0"] = fq["OpIncome"]
+    fq["op_q1"] = fq.groupby(TICKER_COL)["OpIncome"].shift(1)
+    fq["op_q2"] = fq.groupby(TICKER_COL)["OpIncome"].shift(2)
+
+    trend_cols = [
+        "period_q2", "period_q1", "period_q0",
+        "revenue_q2", "revenue_q1", "revenue_q0",
+        "op_q2", "op_q1", "op_q0",
+    ]
     qcols = [
         TICKER_COL, "year", "quarter",
+        *trend_cols,
         "revenue_prev_q", "revenue_cur_q", "revenue_qoq",
         "op_prev_q", "op_cur_q", "op_qoq",
     ]
     qsnap = fq[qcols].copy()
 
     merged = df.merge(qsnap, on=[TICKER_COL, "year", "quarter"], how="left", suffixes=("", "__fq"))
-    for c in ["revenue_prev_q", "revenue_cur_q", "revenue_qoq", "op_prev_q", "op_cur_q", "op_qoq"]:
+    for c in [*trend_cols, "revenue_prev_q", "revenue_cur_q", "revenue_qoq", "op_prev_q", "op_cur_q", "op_qoq"]:
         fq_col = f"{c}__fq"
         if fq_col in merged.columns:
-            merged[c] = pd.to_numeric(merged[fq_col], errors="coerce").astype("float64")
+            if c.startswith("period_"):
+                merged[c] = merged[fq_col]
+            else:
+                merged[c] = pd.to_numeric(merged[fq_col], errors="coerce").astype("float64")
             merged = merged.drop(columns=[fq_col])
 
     # mutate in place at caller expectation
-    for c in ["revenue_prev_q", "revenue_cur_q", "revenue_qoq", "op_prev_q", "op_cur_q", "op_qoq"]:
+    for c in [*trend_cols, "revenue_prev_q", "revenue_cur_q", "revenue_qoq", "op_prev_q", "op_cur_q", "op_qoq"]:
         df[c] = merged[c]
 
-    notes["quarterly_snapshot"] = f"attached from fundamentals source: {p_fq.name}"
+    notes["quarterly_snapshot"] = f"attached from fundamentals source with last3 trend columns: {p_fq.name}"
     return notes
 
 
@@ -629,6 +650,15 @@ def main() -> None:
             "industry_name",
             "industry4",
             "history_quarters",
+            "period_q2",
+            "period_q1",
+            "period_q0",
+            "revenue_q2",
+            "revenue_q1",
+            "revenue_q0",
+            "op_q2",
+            "op_q1",
+            "op_q0",
             "revenue_prev_q",
             "revenue_cur_q",
             "revenue_qoq",

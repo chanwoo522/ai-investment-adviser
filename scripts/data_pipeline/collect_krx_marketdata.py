@@ -26,6 +26,20 @@ def _yyyymmdd(asof: str) -> str:
     return asof.replace("-", "")
 
 
+def _candidate_processed_roots() -> list[Path]:
+    roots = [Path("data/processed"), Path("dist/ai_inv_adv_github_min/data/processed")]
+    out: list[Path] = []
+    for root in roots:
+        if root.exists():
+            out.append(root)
+    return out
+
+
+def _extract_asof_from_name(name: str) -> str | None:
+    m = re.search(r"__asof=(\d{4}-\d{2}-\d{2})__", name)
+    return m.group(1) if m else None
+
+
 def _norm_ticker_col(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or len(df) == 0:
         return pd.DataFrame(columns=["ticker"])
@@ -84,12 +98,39 @@ def _fetch_fundamental_pykrx(ymd: str) -> pd.DataFrame:
     return out
 
 
-def _find_latest_marketdata(processed_dir: Path) -> Path | None:
-    cands = list(processed_dir.glob("krx_marketdata__asof=*.parquet"))
-    if not cands:
+def _find_latest_marketdata(processed_dir: Path, asof: str) -> Path | None:
+    scored: list[tuple[int, str, str, Path]] = []
+    for root in _candidate_processed_roots():
+        for p in root.glob("krx_marketdata__asof=*.parquet"):
+            file_asof = _extract_asof_from_name(p.name)
+            if file_asof is None:
+                continue
+            if file_asof == asof:
+                bucket = 0
+            elif file_asof < asof:
+                bucket = 1
+            else:
+                bucket = 2
+            scored.append((bucket, file_asof, p.name, p))
+
+    if not scored:
         return None
-    cands.sort(key=lambda p: p.stat().st_mtime)
-    return cands[-1]
+
+    exact = sorted([x for x in scored if x[0] == 0], key=lambda x: (x[1], x[2]), reverse=True)
+    older = sorted([x for x in scored if x[0] == 1], key=lambda x: (x[1], x[2]), reverse=True)
+    newer = sorted([x for x in scored if x[0] == 2], key=lambda x: (x[1], x[2]), reverse=False)
+
+    for _, _, _, cand in exact + older + newer:
+        try:
+            df = pd.read_parquet(cand)
+        except Exception:
+            continue
+        df = _norm_ticker_col(df)
+        has_mcap = ("mcap" in df.columns) or ("market_cap" in df.columns)
+        if len(df) > 0 and has_mcap:
+            return cand
+
+    return None
 
 
 def _load_universe_tickers(processed_dir: Path, asof: str) -> pd.DataFrame:
@@ -109,14 +150,60 @@ def _load_universe_tickers(processed_dir: Path, asof: str) -> pd.DataFrame:
     return df[["ticker"]].drop_duplicates()
 
 
+def _load_master_tickers(processed_dir: Path, asof: str) -> pd.DataFrame:
+    cands = sorted(processed_dir.glob(f"krx_master__asof={asof}__*.parquet"))
+    if not cands:
+        for root in _candidate_processed_roots():
+            cands.extend(sorted(root.glob("krx_master__asof=*.parquet")))
+    if not cands:
+        return pd.DataFrame(columns=["ticker"])
+
+    scored: list[tuple[int, str, str, Path]] = []
+    for p in cands:
+        file_asof = _extract_asof_from_name(p.name)
+        if file_asof is None:
+            continue
+        if file_asof == asof:
+            bucket = 0
+        elif file_asof < asof:
+            bucket = 1
+        else:
+            bucket = 2
+        scored.append((bucket, file_asof, p.name, p))
+
+    exact = sorted([x for x in scored if x[0] == 0], key=lambda x: (x[1], x[2]), reverse=True)
+    older = sorted([x for x in scored if x[0] == 1], key=lambda x: (x[1], x[2]), reverse=True)
+    newer = sorted([x for x in scored if x[0] == 2], key=lambda x: (x[1], x[2]), reverse=False)
+    ordered = exact + older + newer
+    if not ordered:
+        return pd.DataFrame(columns=["ticker"])
+
+    df = pd.read_parquet(ordered[0][3])
+    df = _norm_ticker_col(df)
+    return df[["ticker"]].drop_duplicates()
+
+
 def _find_latest_shares_industry(processed_dir: Path, asof: str) -> Path | None:
-    cands = list(processed_dir.glob(f"shares_industry__asof={asof}__*.parquet"))
-    if not cands:
-        cands = list(processed_dir.glob("shares_industry__asof=*_*.parquet"))
-    if not cands:
+    scored: list[tuple[int, str, str, Path]] = []
+    for root in _candidate_processed_roots():
+        for p in root.glob("shares_industry__asof=*_*.parquet"):
+            file_asof = _extract_asof_from_name(p.name)
+            if file_asof is None:
+                continue
+            if file_asof == asof:
+                bucket = 0
+            elif file_asof < asof:
+                bucket = 1
+            else:
+                bucket = 2
+            scored.append((bucket, file_asof, p.name, p))
+    if not scored:
         return None
-    cands.sort(key=lambda p: p.stat().st_mtime)
-    return cands[-1]
+    exact = sorted([x for x in scored if x[0] == 0], key=lambda x: (x[1], x[2]), reverse=True)
+    older = sorted([x for x in scored if x[0] == 1], key=lambda x: (x[1], x[2]), reverse=True)
+    newer = sorted([x for x in scored if x[0] == 2], key=lambda x: (x[1], x[2]), reverse=False)
+    ordered = exact + older + newer
+    return ordered[0][3] if ordered else None
 
 
 def _merge_shares_only(out: pd.DataFrame, processed_dir: Path, asof: str) -> pd.DataFrame:
@@ -158,9 +245,9 @@ def _find_prices_daily(processed_dir: Path, asof: str, metric: str, prices_v: in
     p = processed_dir / f"prices_daily__src=pykrx__start=20160101__asof={asof}__metric={metric}__v={prices_v}.parquet"
     if p.exists():
         return p
-    cands = list(processed_dir.glob(f"prices_daily__src=pykrx__start=20160101__asof={asof}__metric={metric}__v=*.parquet"))
+    cands = list(processed_dir.glob(f"prices_daily__src=pykrx__start=*__asof={asof}__metric={metric}__v=*.parquet"))
     if not cands:
-        cands = list(processed_dir.glob(f"prices_daily__src=pykrx__start=20160101__asof=*__metric={metric}__v={prices_v}.parquet"))
+        cands = list(processed_dir.glob(f"prices_daily__src=pykrx__start=*__asof=*__metric={metric}__v={prices_v}.parquet"))
     if not cands:
         raise FileNotFoundError("prices_daily parquet not found under data/processed")
     cands.sort(key=lambda p: p.stat().st_mtime)
@@ -359,7 +446,7 @@ def main() -> None:
     except Exception as e:
         print(f"[WARN] pykrx mcap failed: {e}")
 
-        latest = _find_latest_marketdata(processed_dir)
+        latest = _find_latest_marketdata(processed_dir, args.asof)
         if latest is not None:
             try:
                 fb = pd.read_parquet(latest)
@@ -367,18 +454,28 @@ def main() -> None:
                 if "mcap" not in fb.columns and "market_cap" in fb.columns:
                     fb = fb.rename(columns={"market_cap": "mcap"})
                 if "mcap" in fb.columns:
-                    mcap = fb.copy()
+                    master_seed = _load_master_tickers(processed_dir, args.asof)
+                    if len(master_seed):
+                        mcap = master_seed.merge(fb, on="ticker", how="left")
+                    else:
+                        mcap = fb.copy()
                     if "asof_ymd" in fb.columns and len(fb):
                         used_ymd = str(fb["asof_ymd"].iloc[0])
+                    else:
+                        fb_asof = _extract_asof_from_name(latest.name)
+                        if fb_asof is not None:
+                            used_ymd = fb_asof.replace("-", "")
                     print(f"[OK] fallback marketdata used: {latest}")
             except Exception as e2:
                 print(f"[WARN] fallback marketdata load failed: {e2}")
 
         if mcap is None:
-            uni = _load_universe_tickers(processed_dir, args.asof)
-            mcap = uni.copy()
+            seed = _load_master_tickers(processed_dir, args.asof)
+            if len(seed) == 0:
+                seed = _load_universe_tickers(processed_dir, args.asof)
+            mcap = seed.copy()
             mcap["mcap"] = pd.NA
-            print(f"[WARN] mcap unavailable; created NaN mcap from universe tickers: n={len(mcap)}")
+            print(f"[WARN] mcap unavailable; created NaN mcap seed from master/universe tickers: n={len(mcap)}")
 
         if mcap is None and not args.soft_fail:
             raise

@@ -26,12 +26,31 @@ def _extract_asof_from_name(name: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _extract_version_from_name(name: str) -> int:
+    m = re.search(r"__v=(\d+)", name)
+    return int(m.group(1)) if m else -1
+
+
 def _read_any_table(p: Path) -> pd.DataFrame:
     if p.suffix.lower() == ".csv":
         return pd.read_csv(p)
     if p.suffix.lower() in {".xlsx", ".xls"}:
         return pd.read_excel(p)
     return pd.read_parquet(p)
+
+
+def _find_prices_raw_path(asof: str) -> Path | None:
+    root = Path("data/processed")
+    cands = sorted(root.glob("prices_raw__src=pykrx__start=*__asof=*__freq=d__v=*.parquet"))
+    valid: list[tuple[str, int, Path]] = []
+    for p in cands:
+        a = _extract_asof_from_name(p.name)
+        if a and a <= asof:
+            valid.append((a, _extract_version_from_name(p.name), p))
+    if not valid:
+        return None
+    valid.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return valid[0][2]
 
 
 def _collect_union_tickers(asof: str, metric: str) -> list[str]:
@@ -98,6 +117,37 @@ def main():
     out = Path(rf"data/processed/prices_daily__src=pykrx__start={args.start}__asof={asof}__metric={metric}__v={args.out_v}.parquet")
     if out.exists():
         print("[OK] exists:", out)
+        return
+
+    raw_path = _find_prices_raw_path(asof)
+    if raw_path is not None:
+        px = pd.read_parquet(raw_path).copy()
+        if "ticker" not in px.columns or "date" not in px.columns:
+            raise ValueError(f"prices_raw missing ticker/date columns: {raw_path}")
+        px["ticker"] = px["ticker"].astype(str).str.extract(r"(\d+)")[0].str.zfill(6)
+        px["date"] = pd.to_datetime(px["date"], errors="coerce")
+        px = px.dropna(subset=["ticker", "date"]).copy()
+
+        union_tickers = set(_collect_union_tickers(asof, metric))
+        if union_tickers:
+            px = px.loc[px["ticker"].isin(union_tickers)].copy()
+
+        keep = [c for c in ["date", "Open", "High", "Low", "Close", "Volume", "ticker"] if c in px.columns]
+        if "Close" not in keep:
+            alt_close = next((c for c in ["close", "adj_close", "Adj Close"] if c in px.columns), None)
+            if alt_close is not None:
+                px = px.rename(columns={alt_close: "Close"})
+                keep = [c for c in ["date", "Open", "High", "Low", "Close", "Volume", "ticker"] if c in px.columns]
+        if "Volume" not in keep:
+            alt_vol = next((c for c in ["volume", "VOL"] if c in px.columns), None)
+            if alt_vol is not None:
+                px = px.rename(columns={alt_vol: "Volume"})
+                keep = [c for c in ["date", "Open", "High", "Low", "Close", "Volume", "ticker"] if c in px.columns]
+        px = px[keep].sort_values(["ticker", "date"]).reset_index(drop=True)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        px.to_parquet(out, index=False)
+        print(f"[OK] saved from prices_raw seed: {out}")
+        print("rows:", len(px), "tickers:", px["ticker"].nunique(), "date_max:", px["date"].max())
         return
 
     tickers = _collect_union_tickers(asof, metric)

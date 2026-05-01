@@ -62,7 +62,7 @@ def load_prices_from_processed(asof: str, metric: str, ret_v: int, price_date: s
     if not p.exists():
         candidates = sorted(
             Path("data/processed").glob(
-                f"prices_daily__src=pykrx__start=20160101__asof={asof}__metric={metric}__v=*.parquet"
+                f"prices_daily__src=pykrx__start=*__asof={asof}__metric={metric}__v=*.parquet"
             )
         )
         if not candidates:
@@ -265,13 +265,10 @@ def main() -> None:
                 qty = 0
             else:
                 qty = math.floor(use_value / price)
-<<<<<<< HEAD
-=======
                 if round_lot > 1:
                     qty = (qty // round_lot) * round_lot
                 if qty > 0 and (qty * price) < min_notional_per_order:
                     qty = 0
->>>>>>> 09e60c16 (feat: live rebalance pipeline cleanup + reporting system stabilization)
             df.at[idx, f"day{i}_qty"] = qty
             df.at[idx, f"day{i}_order_value"] = qty * price if qty > 0 else 0.0
 

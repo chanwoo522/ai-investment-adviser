@@ -11,11 +11,20 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+
+_THIS_DIR = Path(__file__).resolve().parent
+_SCRIPTS_DIR = _THIS_DIR.parent
+_REPO_ROOT = _SCRIPTS_DIR.parent
+for _p in (_THIS_DIR, _SCRIPTS_DIR, _REPO_ROOT):
+    _ps = str(_p)
+    if _ps not in sys.path:
+        sys.path.insert(0, _ps)
 
 try:
     import yaml  # type: ignore
@@ -761,6 +770,8 @@ def main():
     ap.add_argument("--group_col", default="", help="Optional explicit group column. Default: auto-detect industry4/industry/sector...")
     ap.add_argument("--save_holdings", action="store_true")
     ap.add_argument("--save_inputs", action="store_true")
+    ap.add_argument("--disable_expectation_overlay", action="store_true", help="Force expectation overlay off for experiment runs.")
+    ap.add_argument("--disable_quality_penalty", action="store_true", help="Force quality soft penalty off for experiment runs.")
     ap.add_argument("--clip_z", type=float, default=None, help="Clip standardized factor z-scores to +/- this value. Set negative to disable clipping. If omitted, use strategy yaml default when available.")
     ap.add_argument("--use_robust_z", action="store_true", default=None, help="Use median/MAD-based robust z-score instead of mean/std z-score. If omitted, use strategy yaml default when available.")
     ap.add_argument(
@@ -769,6 +780,14 @@ def main():
         default="full",
         help="When filters remove all names in a rebalance bucket: full=fall back to unfiltered set (legacy), error=raise immediately.",
     )
+
+    # Optional AI Bucket Overlay backtest layer.
+    # OFF by default; existing baseline behavior is unchanged unless --ai_model_path is supplied.
+    ap.add_argument("--ai_model_path", default="", help="Optional factor_weight_model.joblib path. If omitted, AI Bucket Overlay is OFF.")
+    ap.add_argument("--ai_raw_px_v", type=int, default=1, help="raw daily prices version for AI dailyagg feature inference")
+    ap.add_argument("--ai_temperature", type=float, default=1.0)
+    ap.add_argument("--ai_cap_profit_accel_delta", type=float, default=-1.0, help="If >=0, clamp profit_accel share to baseline±delta")
+    ap.add_argument("--ai_overlay_strength", type=float, default=1.0, help="0=neutral/off, 1=full overlay")
     args = ap.parse_args()
 
     feat_candidates = [
@@ -831,6 +850,28 @@ def main():
 
     price_hist = load_price_history(args.asof, args.metric)
 
+    ai_bundle = None
+    ai_raw_px = None
+    ai_overlay_enabled = bool(str(args.ai_model_path).strip())
+    if ai_overlay_enabled:
+        # Reuse the exact live-scoring AI Bucket Overlay implementation.
+        # Imported lazily to preserve baseline backtest behavior and avoid hard dependency when OFF.
+        from scripts.live.score_latest_rebalance import (
+            _load_ai_overlay_bundle,
+            _pick_raw_prices_path,
+            _load_raw_prices,
+        )
+
+        ai_bundle = _load_ai_overlay_bundle(str(args.ai_model_path).strip())
+        raw_px_path = _pick_raw_prices_path(args.asof, int(args.ai_raw_px_v))
+        if raw_px_path is None:
+            raise FileNotFoundError(
+                f"AI overlay requested but raw prices file not found for asof={args.asof}, raw_px_v={args.ai_raw_px_v}"
+            )
+        ai_raw_px = _load_raw_prices(raw_px_path)
+        print(f"[OK] ai overlay model : {args.ai_model_path}")
+        print(f"[OK] ai raw prices    : {raw_px_path}")
+
     def _git_hash() -> str:
         try:
             return subprocess.check_output(["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL).decode().strip()
@@ -850,6 +891,12 @@ def main():
         "entry_gap": float(args.entry_gap),
         "max_per_group": int(args.max_per_group),
         "group_col_requested": str(args.group_col),
+        "ai_overlay_active": bool(ai_overlay_enabled),
+        "ai_model_path": str(args.ai_model_path).strip(),
+        "ai_raw_px_v": int(args.ai_raw_px_v),
+        "ai_temperature": float(args.ai_temperature),
+        "ai_cap_profit_accel_delta": None if float(args.ai_cap_profit_accel_delta) < 0 else float(args.ai_cap_profit_accel_delta),
+        "ai_overlay_strength": float(args.ai_overlay_strength),
         "git_hash": _git_hash(),
     }
     out_meta.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -896,6 +943,10 @@ def main():
     expectation_cfg = modules_cfg.get("expectation_overlay", {})
     quality_penalty_cfg = modules_cfg.get("quality_soft_penalty", {})
     mcap_grouping_cfg = modules_cfg.get("mcap_grouping", {})
+    if args.disable_expectation_overlay:
+        expectation_cfg = {"enabled": False}
+    if args.disable_quality_penalty:
+        quality_penalty_cfg = {"enabled": False}
 
     meta["hold_bonus"] = resolved_hold_bonus
     meta["clip_z"] = resolved_clip_z
@@ -934,6 +985,7 @@ def main():
         else:
             gg = gg_filtered.copy()
 
+        gg["score_total_base"] = 0.0
         gg["score_total"] = 0.0
         used_cols = []
         raw_factor_set = set(resolved_raw_factors or [])
@@ -956,20 +1008,79 @@ def main():
                 z = raw.fillna(0.0).astype("float64")
                 rk = z.rank(ascending=False, method="min")
                 mult = pd.Series(1.0, index=gg.index, dtype="float64")
-                contrib = ww * z
+                contrib_base = ww * z
             else:
                 z_base = standardize_factor(safe_fill_for_z(raw), use_robust_z=resolved_use_robust_z, clip_z=None)
                 z = apply_piecewise_clip(z_base, clip_z=None if resolved_clip_z is None or resolved_clip_z < 0 else resolved_clip_z, clip_tiers=resolved_clip_tiers)
                 rk = z.rank(ascending=False, method="min")
                 mult = _mask_mult_for(c)
-                contrib = ww * z * mult
+                contrib_base = ww * z * mult
 
             gg[f"{c}__raw"] = raw
+            gg[f"{c}__signal"] = z
             gg[f"{c}__z"] = z
             gg[f"{c}__rank"] = rk
             gg[f"{c}__mult"] = mult
-            gg[f"{c}__contrib"] = contrib
-            gg["score_total"] += contrib
+            gg[f"{c}__contrib_base"] = contrib_base
+            gg["score_total_base"] += contrib_base
+
+        if ai_overlay_enabled:
+            from scripts.live.score_latest_rebalance import (
+                DEFAULT_BUCKET_SPECS,
+                _build_active_bucket_specs,
+                _compute_bucket_scores,
+                _infer_live_ai_overlay,
+                _build_factor_to_bucket,
+            )
+
+            active_buckets = _build_active_bucket_specs(
+                weights=weights,
+                df_cols=list(gg.columns),
+                bucket_specs=DEFAULT_BUCKET_SPECS,
+            )
+            gg = _compute_bucket_scores(gg, active_buckets=active_buckets)
+            if ai_raw_px is None or ai_bundle is None:
+                raise RuntimeError("AI overlay is enabled but ai_raw_px or ai_bundle is missing")
+
+            ai_overlay_info = _infer_live_ai_overlay(
+                scored_filtered=gg,
+                target_dt=pd.Timestamp(rm),
+                active_buckets=active_buckets,
+                ai_bundle=ai_bundle,
+                raw_px=ai_raw_px,
+                ai_temperature=float(args.ai_temperature),
+                ai_cap_profit_accel_delta=None if float(args.ai_cap_profit_accel_delta) < 0 else float(args.ai_cap_profit_accel_delta),
+                ai_overlay_strength=float(args.ai_overlay_strength),
+            )
+            factor_to_bucket = _build_factor_to_bucket(active_buckets)
+            gg["score_total"] = 0.0
+
+            for c in used_cols:
+                bucket = factor_to_bucket.get(c, None)
+                ai_mult = float(ai_overlay_info["bucket_multipliers"].get(bucket, 1.0)) if bucket else 1.0
+                gg[f"{c}__bucket"] = bucket if bucket is not None else pd.NA
+                gg[f"{c}__ai_mult"] = ai_mult
+                gg[f"{c}__contrib"] = gg[f"{c}__contrib_base"] * ai_mult
+                gg["score_total"] += gg[f"{c}__contrib"]
+
+            for bucket, val in ai_overlay_info["pred_alpha"].items():
+                gg[f"ai_pred_alpha__{bucket}"] = float(val)
+            for bucket, val in ai_overlay_info["base_share"].items():
+                gg[f"ai_base_share__{bucket}"] = float(val)
+            for bucket, val in ai_overlay_info["dyn_share"].items():
+                gg[f"ai_dyn_share__{bucket}"] = float(val)
+            for bucket, val in ai_overlay_info["bucket_multipliers"].items():
+                gg[f"ai_bucket_mult__{bucket}"] = float(val)
+            for k, v in ai_overlay_info["feature_row"].items():
+                gg[f"ai_feat__{k}"] = v
+            gg["ai_overlay_active"] = 1
+        else:
+            gg["score_total"] = gg["score_total_base"]
+            for c in used_cols:
+                gg[f"{c}__contrib"] = gg[f"{c}__contrib_base"]
+                gg[f"{c}__ai_mult"] = 1.0
+                gg[f"{c}__bucket"] = pd.NA
+            gg["ai_overlay_active"] = 0
 
         gg = apply_expectation_overlay(
             gg,
@@ -986,12 +1097,22 @@ def main():
         gg["score_rank"] = gg["score_total"].rank(ascending=False, method="min")
         gg["rebalance_month"] = rm
 
-        keep = ["ticker", "rebalance_month", "score_total", "score", "score_rank"]
+        keep = ["ticker", "rebalance_month", "score_total_base", "score_total", "score", "score_rank", "ai_overlay_active"]
         for c in used_cols:
-            for suf in ("__raw", "__z", "__rank", "__mult", "__contrib"):
+            for suf in ("__raw", "__signal", "__z", "__rank", "__mult", "__contrib_base", "__contrib", "__ai_mult", "__bucket"):
                 col = f"{c}{suf}"
                 if col in gg.columns:
                     keep.append(col)
+
+        for c in list(gg.columns):
+            if (
+                c.startswith("ai_pred_alpha__")
+                or c.startswith("ai_base_share__")
+                or c.startswith("ai_dyn_share__")
+                or c.startswith("ai_bucket_mult__")
+                or c.startswith("ai_feat__")
+            ):
+                keep.append(c)
 
         for c in [
             "expectation_overlay_active",

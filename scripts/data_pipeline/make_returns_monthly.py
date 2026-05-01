@@ -28,7 +28,7 @@ def _find_prices_daily_path(asof: str, metric: str, px_v: int) -> Path:
     if exact.exists():
         return exact
 
-    cands = sorted(root.glob(f"prices_daily__src=pykrx__start=20160101__asof=*__metric={metric}__v={px_v}.parquet"))
+    cands = sorted(root.glob(f"prices_daily__src=pykrx__start=*__asof=*__metric={metric}__v={px_v}.parquet"))
     valid = []
     for p in cands:
         a = _extract_asof_from_name(p.name)

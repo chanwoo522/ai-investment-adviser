@@ -11,6 +11,7 @@ if str(ROOT) not in sys.path:
 
 import argparse
 from datetime import datetime
+import json
 import re
 
 import pandas as pd
@@ -62,6 +63,15 @@ def _extract_asof_from_name(name: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _seed_source_label_from_path(p: Path | None) -> str:
+    if p is None:
+        return "fallback_seed_from_unknown"
+    asof = _extract_asof_from_name(p.name)
+    if asof:
+        return f"fallback_seed_from_{asof}"
+    return "fallback_seed_from_unknown"
+
+
 def _source_priority(name: str) -> int:
     # 낮을수록 우선
     if "krx_master__" in name:
@@ -87,8 +97,11 @@ def _fallback_master_from_local(asof: str) -> tuple[pd.DataFrame, Path | None]:
     Within same asof bucket, prefer:
       krx_master > universe > features_live > features_phase1 > krx_marketdata
     """
-    root = Path("data/processed")
     candidates: list[Path] = []
+    roots = [
+        Path("data/processed"),
+        Path("dist/ai_inv_adv_github_min/data/processed"),
+    ]
 
     patterns = [
         "krx_master__asof=*__src=pykrx__v=*.parquet",
@@ -101,8 +114,11 @@ def _fallback_master_from_local(asof: str) -> tuple[pd.DataFrame, Path | None]:
         "krx_marketdata__asof=*__*.parquet",
     ]
 
-    for pat in patterns:
-        candidates.extend(sorted(root.glob(pat)))
+    for root in roots:
+        if not root.exists():
+            continue
+        for pat in patterns:
+            candidates.extend(sorted(root.glob(pat)))
 
     scored: list[tuple[int, str, int, str, Path]] = []
     for p in candidates:
@@ -144,6 +160,47 @@ def _fallback_master_from_local(asof: str) -> tuple[pd.DataFrame, Path | None]:
     return pd.DataFrame(columns=[TICKER_COL, NAME_COL]), None
 
 
+def _meta_path_for(out: Path) -> Path:
+    return out.with_suffix(".meta.json")
+
+
+def _write_meta(meta_path: Path, payload: dict) -> None:
+    meta_path.parent.mkdir(parents=True, exist_ok=True)
+    meta_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _build_meta_payload(
+    *,
+    asof: str,
+    out: Path,
+    status: str,
+    source: str,
+    rows: int,
+    tickers: int,
+    requested_ymd: str,
+    used_ymd: str | None,
+    notes: str,
+    fallback_seed_path: Path | None = None,
+    collection_error: str | None = None,
+    provisional: bool = False,
+) -> dict:
+    return {
+        "asof": asof,
+        "output_path": str(out),
+        "collection_status": status,
+        "source": source,
+        "requested_ymd": requested_ymd,
+        "used_ymd": used_ymd,
+        "rows": int(rows),
+        "tickers": int(tickers),
+        "notes": notes,
+        "fallback_seed_path": str(fallback_seed_path) if fallback_seed_path else None,
+        "collection_error": collection_error,
+        "provisional": bool(provisional),
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+    }
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--asof", required=True, help="YYYY-MM-DD")
@@ -153,6 +210,7 @@ def main() -> None:
     args = ap.parse_args()
 
     out = Path("data/processed") / f"krx_master__asof={args.asof}__src={args.src}__v={args.out_v}.parquet"
+    out_meta = _meta_path_for(out)
     out.parent.mkdir(parents=True, exist_ok=True)
 
     if out.exists():
@@ -196,29 +254,98 @@ def main() -> None:
         master[TICKER_COL] = master[TICKER_COL].astype(str)
         master = master.drop_duplicates(TICKER_COL)
         master.to_parquet(out, index=False)
+        _write_meta(
+            out_meta,
+            _build_meta_payload(
+                asof=args.asof,
+                out=out,
+                status="primary_collected",
+                source=f"primary_{args.src}",
+                rows=len(master),
+                tickers=master[TICKER_COL].nunique(),
+                requested_ymd=asof_ymd,
+                used_ymd=used_ymd,
+                notes="primary(pykrx)",
+            ),
+        )
         print("[OK] master:", out)
         print(f"[INFO] used_ymd={used_ymd} rows={len(master)} tickers={master[TICKER_COL].nunique()}")
         return
 
     except Exception as e:
-        print(f"[WARN] KRX master collection failed, switching to local fallback: {e}")
+        err_msg = str(e)
+        print(f"[WARN] KRX master collection failed, switching to local fallback: {err_msg}")
 
         master, src = _fallback_master_from_local(args.asof)
         if len(master) == 0:
+            _write_meta(
+                out_meta,
+                _build_meta_payload(
+                    asof=args.asof,
+                    out=out,
+                    status="collection_failed_no_fallback",
+                    source="collection_failed",
+                    rows=0,
+                    tickers=0,
+                    requested_ymd=asof_ymd,
+                    used_ymd=None,
+                    notes="KRX primary collection failed and no fallback seed was found.",
+                    collection_error=err_msg,
+                    provisional=True,
+                ),
+            )
             raise RuntimeError(
                 f"KRX master collection failed and no usable local fallback source was found for asof={args.asof}"
             ) from e
 
         print(f"[WARN] local fallback master source used: {src} rows={len(master)}")
+        seed_label = _seed_source_label_from_path(src)
 
         master["asof_ymd"] = pd.NA
         master["created_at"] = datetime.now().isoformat(timespec="seconds")
-        master["notes"] = f"fallback(local nearest): {src.name if src else 'unknown'}"
+        master["notes"] = f"{seed_label}; provisional fallback seed; source_file={src.name if src else 'unknown'}"
         master = master[[TICKER_COL, NAME_COL, "asof_ymd", "created_at", "notes"]].drop_duplicates(TICKER_COL)
 
         out.parent.mkdir(parents=True, exist_ok=True)
         master.to_parquet(out, index=False)
+        provenance_out = Path("data/processed") / f"krx_master__asof={args.asof}__src={seed_label}__v={args.out_v}.parquet"
+        master.to_parquet(provenance_out, index=False)
+        _write_meta(
+            out_meta,
+            _build_meta_payload(
+                asof=args.asof,
+                out=out,
+                status="fallback_seeded",
+                source=seed_label,
+                rows=len(master),
+                tickers=master[TICKER_COL].nunique(),
+                requested_ymd=asof_ymd,
+                used_ymd=None,
+                notes=f"Primary KRX collection failed. Seeded from local fallback snapshot {src.name if src else 'unknown'}.",
+                fallback_seed_path=src,
+                collection_error=err_msg,
+                provisional=True,
+            ),
+        )
+        _write_meta(
+            _meta_path_for(provenance_out),
+            _build_meta_payload(
+                asof=args.asof,
+                out=provenance_out,
+                status="fallback_seeded",
+                source=seed_label,
+                rows=len(master),
+                tickers=master[TICKER_COL].nunique(),
+                requested_ymd=asof_ymd,
+                used_ymd=None,
+                notes=f"Primary KRX collection failed. Seeded from local fallback snapshot {src.name if src else 'unknown'}.",
+                fallback_seed_path=src,
+                collection_error=err_msg,
+                provisional=True,
+            ),
+        )
         print("[OK] master fallback saved:", out)
+        print("[OK] master fallback provenance saved:", provenance_out)
         print(f"[INFO] rows={len(master)} tickers={master[TICKER_COL].nunique()}")
         return
 
