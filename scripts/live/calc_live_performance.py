@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import calendar
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
@@ -48,6 +50,233 @@ BENCHMARK_METADATA_COLUMNS = [
     "source",
     "index_master_market",
 ]
+
+
+@dataclass(frozen=True)
+class MonthlyPerformanceResult:
+    """Monthly static-portfolio performance on exact common official dates."""
+
+    monthly_performance: pd.DataFrame
+    security_returns: pd.DataFrame
+    qa: dict[str, Any]
+
+
+def _normalise_monthly_performance_inputs(
+    starting_positions: pd.DataFrame,
+    official_equity_prices: pd.DataFrame,
+    official_krx300: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    positions = starting_positions.copy()
+    prices = official_equity_prices.copy()
+    benchmark = official_krx300.copy()
+    required_positions = {"ticker", "shares", "position_value"}
+    required_prices = {"date", "ticker", "close"}
+    required_benchmark = {"date", "krx300_price_index"}
+    if missing := required_positions.difference(positions.columns):
+        raise ValueError(f"starting_positions missing columns: {sorted(missing)}")
+    if missing := required_prices.difference(prices.columns):
+        raise ValueError(f"official_equity_prices missing columns: {sorted(missing)}")
+    if missing := required_benchmark.difference(benchmark.columns):
+        raise ValueError(f"official_krx300 missing columns: {sorted(missing)}")
+
+    positions["ticker"] = normalize_ticker(positions["ticker"])
+    positions["shares"] = pd.to_numeric(positions["shares"], errors="raise")
+    positions["position_value"] = pd.to_numeric(positions["position_value"], errors="raise")
+    prices["ticker"] = normalize_ticker(prices["ticker"])
+    prices["date"] = pd.to_datetime(prices["date"], errors="raise").dt.normalize()
+    prices["close"] = pd.to_numeric(prices["close"], errors="raise")
+    benchmark["date"] = pd.to_datetime(benchmark["date"], errors="raise").dt.normalize()
+    benchmark["krx300_price_index"] = pd.to_numeric(
+        benchmark["krx300_price_index"], errors="raise"
+    )
+    if positions.empty or positions["ticker"].duplicated().any():
+        raise ValueError("starting_positions must contain one row per ticker")
+    if prices.duplicated(["date", "ticker"]).any():
+        raise ValueError("official_equity_prices contains duplicate ticker/date rows")
+    if benchmark["date"].duplicated().any():
+        raise ValueError("official_krx300 contains duplicate dates")
+    if positions["shares"].le(0).any() or positions["position_value"].le(0).any():
+        raise ValueError("starting positions must have positive shares and position_value")
+    if prices["close"].le(0).any() or benchmark["krx300_price_index"].le(0).any():
+        raise ValueError("official prices and index levels must be positive")
+    return positions, prices, benchmark
+
+
+def _assert_static_quantity_contract(
+    positions: pd.DataFrame,
+    activity_ledger: pd.DataFrame | None,
+    *,
+    require_quantity_parity: bool,
+) -> None:
+    if not require_quantity_parity:
+        return
+    end_quantity_col = next(
+        (column for column in ("end_quantity", "current_qty", "ending_shares") if column in positions.columns),
+        None,
+    )
+    if end_quantity_col is not None:
+        ending = pd.to_numeric(positions[end_quantity_col], errors="raise")
+        if not ending.eq(positions["shares"]).all() and activity_ledger is None:
+            raise RuntimeError("MONTHLY_PERFORMANCE_BLOCKED_ACTIVITY_LEDGER_REQUIRED")
+    if activity_ledger is None or activity_ledger.empty:
+        return
+    ledger = activity_ledger.copy()
+    quantity_column = next(
+        (
+            column
+            for column in ("signed_quantity", "quantity_delta", "trade_quantity", "shares_delta")
+            if column in ledger.columns
+        ),
+        None,
+    )
+    if quantity_column is None:
+        raise ValueError("activity_ledger lacks a signed quantity column")
+    ledger[quantity_column] = pd.to_numeric(ledger[quantity_column], errors="raise")
+    if "ticker" not in ledger.columns:
+        raise ValueError("activity_ledger lacks ticker")
+    ledger["ticker"] = normalize_ticker(ledger["ticker"])
+    deltas = ledger.groupby("ticker")[quantity_column].sum()
+    if deltas.abs().gt(0).any():
+        raise RuntimeError("MONTHLY_PERFORMANCE_REQUIRES_TRANSACTION_AWARE_LEDGER")
+
+
+def build_monthly_portfolio_performance(
+    *,
+    starting_positions: pd.DataFrame,
+    official_equity_prices: pd.DataFrame,
+    official_krx300: pd.DataFrame,
+    performance_start: str | pd.Timestamp,
+    performance_end: str | pd.Timestamp,
+    activity_ledger: pd.DataFrame | None = None,
+    require_quantity_parity: bool = True,
+) -> MonthlyPerformanceResult:
+    """Build exact-date monthly NAV without filling prices or using future values.
+
+    This is the parameterised form of the historical 26Q3 subscriber-report
+    calculation.  It intentionally preserves the original column names,
+    rounding, KRX300 equivalent-NAV method, and security-return calculation.
+    """
+
+    positions, prices, benchmark = _normalise_monthly_performance_inputs(
+        starting_positions, official_equity_prices, official_krx300
+    )
+    start = pd.Timestamp(performance_start).normalize()
+    end = pd.Timestamp(performance_end).normalize()
+    if start > end:
+        raise ValueError("performance_start must be on or before performance_end")
+    _assert_static_quantity_contract(
+        positions, activity_ledger, require_quantity_parity=require_quantity_parity
+    )
+
+    tickers = tuple(positions["ticker"].astype(str))
+    prices = prices.loc[
+        prices["ticker"].isin(tickers) & prices["date"].between(start, end)
+    ].copy()
+    benchmark = benchmark.loc[benchmark["date"].between(start, end)].copy()
+    complete_equity_dates = (
+        prices.groupby("date")["ticker"].nunique().loc[lambda values: values.eq(len(tickers))].index
+    )
+    common = sorted(set(complete_equity_dates).intersection(set(benchmark["date"])))
+    if start not in common or end not in common:
+        raise RuntimeError("common-date contract lacks exact performance endpoints")
+
+    common_dates: list[pd.Timestamp] = [start]
+    month_cursor = start.to_period("M")
+    end_month = end.to_period("M")
+    while month_cursor <= end_month:
+        candidates = [
+            date
+            for date in common
+            if date.to_period("M") == month_cursor and start <= date <= end
+        ]
+        if not candidates:
+            raise RuntimeError(f"no complete common trading date for {month_cursor}")
+        month_end = max(candidates)
+        if month_end not in common_dates:
+            common_dates.append(month_end)
+        month_cursor += 1
+    if end not in common_dates:
+        common_dates.append(end)
+    common_dates = sorted(common_dates)
+
+    start_nav = float(positions["position_value"].sum())
+    if start_nav <= 0:
+        raise ValueError("starting NAV must be positive")
+    quantity = positions.set_index("ticker")["shares"]
+    price_wide = prices.pivot(index="date", columns="ticker", values="close")
+    index_map = benchmark.set_index("date")["krx300_price_index"]
+    index_start = float(index_map.loc[start])
+    is_partial_end = end.day < calendar.monthrange(end.year, end.month)[1]
+    rows: list[dict[str, Any]] = []
+    previous_nav = start_nav
+    previous_equivalent = start_nav
+    previous_index = index_start
+    for position, date in enumerate(common_dates):
+        nav = start_nav if position == 0 else float((price_wide.loc[date, list(tickers)] * quantity).sum())
+        index_level = float(index_map.loc[date])
+        equivalent_nav = start_nav * index_level / index_start
+        rows.append(
+            {
+                "date": date.strftime("%Y-%m-%d") + ("(부분월)" if date == end and is_partial_end else ""),
+                "date_iso": date.strftime("%Y-%m-%d"),
+                "portfolio_nav": round(nav),
+                "portfolio_change_amount": round(nav - previous_nav) if position else 0,
+                "portfolio_monthly_change_rate": nav / previous_nav - 1 if position else 0.0,
+                "portfolio_cumulative_change_rate": nav / start_nav - 1 if position else 0.0,
+                "krx300_price_index": index_level,
+                "krx300_equivalent_nav": round(equivalent_nav),
+                "krx300_change_amount": round(equivalent_nav - previous_equivalent) if position else 0,
+                "krx300_monthly_change_rate": index_level / previous_index - 1 if position else 0.0,
+                "krx300_cumulative_change_rate": index_level / index_start - 1 if position else 0.0,
+                "cumulative_excess_return": (nav / start_nav - 1) - (index_level / index_start - 1),
+            }
+        )
+        previous_nav = nav
+        previous_equivalent = equivalent_nav
+        previous_index = index_level
+    monthly = pd.DataFrame(rows)
+
+    end_prices = price_wide.loc[end]
+    security_rows: list[dict[str, Any]] = []
+    for item in positions.itertuples(index=False):
+        ticker = str(item.ticker)
+        start_value = float(item.position_value)
+        end_value = float(item.shares) * float(end_prices.loc[ticker])
+        security_rows.append(
+            {
+                "ticker": ticker,
+                "name": getattr(item, "name", ticker),
+                "quantity": int(item.shares),
+                "start_value": round(start_value),
+                "end_value": round(end_value),
+                "change_amount": round(end_value - start_value),
+                "change_rate": end_value / start_value - 1,
+                "start_date": start.strftime("%Y-%m-%d"),
+                "end_date": end.strftime("%Y-%m-%d"),
+                "end_official_close": float(end_prices.loc[ticker]),
+            }
+        )
+    security = pd.DataFrame(security_rows).sort_values("change_rate", ascending=False).reset_index(drop=True)
+    start_error = abs(float(security["start_value"].sum()) - float(monthly.iloc[0]["portfolio_nav"]))
+    end_error = abs(float(security["end_value"].sum()) - float(monthly.iloc[-1]["portfolio_nav"]))
+    change_error = abs(
+        float(security["change_amount"].sum())
+        - (float(monthly.iloc[-1]["portfolio_nav"]) - float(monthly.iloc[0]["portfolio_nav"]))
+    )
+    qa = {
+        "start_nav_basis": "ACTUAL_POST_TRADE_POSITION_VALUE",
+        "common_dates": [date.strftime("%Y-%m-%d") for date in common_dates],
+        "equity_count": len(tickers),
+        "start_nav_reconciliation_error_krw": start_error,
+        "end_nav_reconciliation_error_krw": end_error,
+        "change_reconciliation_error_krw": change_error,
+        "reconciliation_status": "PASS" if max(start_error, end_error, change_error) <= 1 else "FAIL",
+        "fill_used": False,
+        "etf_proxy_used": False,
+    }
+    if qa["reconciliation_status"] != "PASS":
+        raise RuntimeError(f"performance reconciliation failed: {qa}")
+    return MonthlyPerformanceResult(monthly, security, qa)
 
 
 def normalize_ticker(s: pd.Series) -> pd.Series:

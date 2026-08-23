@@ -20,8 +20,11 @@ if BASE_DIR not in sys.path:
 import argparse
 import json
 import re
+import shutil
+import subprocess
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Any
+from typing import Any, Mapping, Optional
 
 import joblib
 import numpy as np
@@ -84,6 +87,24 @@ DEFAULT_BUCKET_SPECS: dict[str, list[str]] = {
 }
 
 RAW_FACTOR_DEFAULTS = {"op_growth_streak2", "rev_growth_streak2"}
+
+
+@dataclass(frozen=True)
+class FreshStartScoringResult:
+    full_universe_scores: pd.DataFrame
+    eligible_scores: pd.DataFrame
+    fresh_start_top_k: pd.DataFrame
+    metadata: dict[str, Any]
+    artifact_paths: dict[str, Path]
+
+
+@dataclass(frozen=True)
+class ModelCollectionResult:
+    collection_mode: str
+    fresh_start_scores: pd.DataFrame
+    fresh_start_top_k: pd.DataFrame
+    metadata: dict[str, Any]
+    artifact_paths: dict[str, Path]
 
 
 def load_krx_master_meta(asof: str, master_src: str = "pykrx", master_v: int = 1) -> dict[str, Any]:
@@ -1139,6 +1160,423 @@ def make_scores_full_universe(
     )
 
     return full, scored, ai_overlay_info
+
+
+def _read_parameterized_table(value: pd.DataFrame | str | Path | None) -> pd.DataFrame | None:
+    if value is None:
+        return None
+    if isinstance(value, pd.DataFrame):
+        return value.copy()
+    path = Path(value)
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    if path.suffix.lower() == ".parquet":
+        return pd.read_parquet(path)
+    if path.suffix.lower() in {".csv", ".txt"}:
+        return pd.read_csv(path, dtype={"ticker": str})
+    raise ValueError(f"unsupported table format: {path}")
+
+
+def _load_parameterized_strategy(
+    strategy_config: Mapping[str, Any] | str | Path,
+) -> tuple[dict[str, float], dict[str, Any], dict[str, Any], dict[str, Any], str]:
+    """Resolve strategy values without changing any production strategy defaults."""
+
+    config: Mapping[str, Any]
+    config_path: Path | None = None
+    if isinstance(strategy_config, (str, Path)):
+        config_path = Path(strategy_config)
+        if not config_path.is_file():
+            raise FileNotFoundError(config_path)
+        if config_path.suffix.lower() == ".json":
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+        else:
+            import yaml
+
+            config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    else:
+        config = dict(strategy_config)
+
+    nested_path = config.get("strategy_config_path") or config.get("path")
+    strategy_name = str(config.get("strategy_name") or config.get("strategy") or "").strip()
+    if nested_path and "weights" not in config:
+        config_path = Path(str(nested_path))
+        if not config_path.is_file():
+            raise FileNotFoundError(config_path)
+        if not strategy_name:
+            raise ValueError("strategy_name is required with strategy_config_path")
+        weights, filters, _ = load_strategy(config_path, strategy_name)
+        runtime = load_strategy_runtime(config_path, strategy_name)
+        modules = load_strategy_modules_config(config_path, strategy_name)
+        selection = dict(modules.get("selection", {})) if isinstance(modules, dict) else {}
+        try:
+            import yaml
+
+            raw = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+            selected = ((raw.get("strategies") or {}).get(strategy_name) or {})
+            selection = dict(selected.get("selection", {}) or {})
+        except Exception:
+            selection = selection or {}
+        return dict(weights), dict(filters), dict(runtime), selection, strategy_name
+
+    if "strategies" in config:
+        strategies = config.get("strategies") or {}
+        if not strategy_name:
+            if len(strategies) != 1:
+                raise ValueError("strategy_name is required when multiple strategies are present")
+            strategy_name = str(next(iter(strategies)))
+        selected = dict(strategies.get(strategy_name) or {})
+    else:
+        selected = dict(config)
+        strategy_name = strategy_name or str(selected.get("name") or "fresh_start")
+    weights = {str(key): float(value) for key, value in (selected.get("weights") or {}).items()}
+    if not weights:
+        raise ValueError("strategy_config does not contain weights")
+    filters = dict(selected.get("filters") or {})
+    runtime = dict(selected.get("scoring") or {})
+    selection = dict(selected.get("selection") or {})
+    return weights, filters, runtime, selection, strategy_name
+
+
+def run_fresh_start_scoring_pipeline(
+    *,
+    prepared_features: pd.DataFrame | str | Path,
+    certified_universe: pd.DataFrame | str | Path | None,
+    marketdata: pd.DataFrame | str | Path | None,
+    strategy_config: Mapping[str, Any] | str | Path,
+    information_asof: str,
+    target_date: str | pd.Timestamp,
+    output_dir: str | Path,
+    holding_bonus: float = 0.0,
+    keep_current_top_n: int = 0,
+    current_holdings: pd.DataFrame | str | Path | None = None,
+    ignore_current_membership: bool = True,
+) -> FreshStartScoringResult:
+    """Run the production scorer under the immutable fresh-start contract."""
+
+    if float(holding_bonus) != 0.0:
+        raise ValueError("fresh-start holding_bonus must be exactly 0")
+    if int(keep_current_top_n) != 0:
+        raise ValueError("fresh-start keep_current_top_n must be exactly 0")
+    if not ignore_current_membership:
+        raise ValueError("fresh-start scoring must ignore current account membership")
+    # current_holdings is intentionally neither loaded nor inspected.  Keeping
+    # the argument allows callers to prove membership independence directly.
+    _ = current_holdings
+
+    features = _read_parameterized_table(prepared_features)
+    if features is None or features.empty:
+        raise ValueError("prepared_features is empty")
+    features["ticker"] = normalize_ticker_series(features["ticker"])
+    if "rebalance_month" not in features.columns:
+        required = {"year", "quarter"}
+        if missing := required.difference(features.columns):
+            raise ValueError(f"prepared_features missing columns: {sorted(missing)}")
+        features["rebalance_month"] = compute_rebalance_month_from_yq(
+            features["year"], features["quarter"]
+        )
+    features["rebalance_month"] = pd.to_datetime(features["rebalance_month"]).dt.normalize()
+    target_dt = pd.Timestamp(target_date).normalize()
+    cohort = features.loc[features["rebalance_month"].eq(target_dt)].copy()
+    if cohort.empty:
+        raise RuntimeError(f"No rows found for rebalance_month={target_dt.date()}")
+
+    universe = _read_parameterized_table(certified_universe)
+    if universe is not None:
+        if "ticker" not in universe.columns:
+            raise ValueError("certified_universe lacks ticker")
+        universe["ticker"] = normalize_ticker_series(universe["ticker"])
+        certified_tickers = set(universe["ticker"].astype(str))
+        cohort = cohort.loc[cohort["ticker"].astype(str).isin(certified_tickers)].copy()
+        if cohort.empty:
+            raise RuntimeError("certified universe has no target-date feature rows")
+    market = _read_parameterized_table(marketdata)
+
+    weights, filters, runtime, selection, strategy_name = _load_parameterized_strategy(
+        strategy_config
+    )
+    resolved_clip_z = runtime.get("clip_z", 5.0)
+    resolved_use_robust_z = bool(runtime.get("use_robust_z", False))
+    resolved_clip_tiers = list(runtime.get("clip_tiers", [])) if isinstance(runtime.get("clip_tiers", []), list) else []
+    resolved_raw_factors = list(runtime.get("raw_factors", [])) if isinstance(runtime.get("raw_factors", []), list) else []
+    if not resolved_raw_factors:
+        resolved_raw_factors = [column for column in weights if column in RAW_FACTOR_DEFAULTS]
+    quality_penalty_cfg = dict(runtime.get("quality_soft_penalty", {}) or {})
+    mcap_grouping_cfg = dict(selection.get("mcap_grouping", {}) or {})
+    portfolio_size = int(selection.get("portfolio_size", 10))
+    max_per_group = int(selection.get("max_per_group", 0))
+    filter_fallback = str(runtime.get("filter_fallback", "full"))
+
+    cohort = ensure_filter_alias_columns(cohort)
+    if "name" in cohort.columns:
+        name_map = cohort[["ticker", "name"]].drop_duplicates("ticker")
+    else:
+        name_map = cohort[["ticker"]].drop_duplicates().assign(name=lambda frame: frame["ticker"])
+    group_col = str(selection.get("group_col") or "").strip() or detect_group_col(cohort)
+    if not group_col or group_col not in cohort.columns:
+        group_col = None
+
+    full_scores, eligible_scores, overlay = make_scores_full_universe(
+        g=cohort,
+        weights=weights,
+        filters=filters,
+        target_dt=target_dt,
+        name_map=name_map,
+        group_col=group_col,
+        filter_fallback=filter_fallback,
+        clip_z=None if resolved_clip_z is None or float(resolved_clip_z) < 0 else float(resolved_clip_z),
+        use_robust_z=resolved_use_robust_z,
+        hold_bonus=0.0,
+        current_tickers=set(),
+        raw_factors=resolved_raw_factors,
+        clip_tiers=resolved_clip_tiers,
+        ai_bundle=None,
+        ai_raw_px=None,
+        price_history=market,
+        quality_penalty_cfg=quality_penalty_cfg,
+    )
+    scored_sorted = eligible_scores.sort_values(
+        ["score_adj", "score", "ticker"], ascending=[False, False, True]
+    ).reset_index(drop=True)
+    effective_group_col = (
+        group_col if group_col and group_col in scored_sorted.columns else detect_group_col(scored_sorted)
+    )
+    top_k = select_target_portfolio_with_mcap_groups(
+        scored_sorted,
+        portfolio_size=portfolio_size,
+        keep_current_top_n=0,
+        effective_group_col=effective_group_col,
+        max_per_group=max_per_group,
+        current_tickers=set(),
+        base_selector=select_target_portfolio,
+        grouping_cfg=mcap_grouping_cfg,
+    ).copy()
+    selected = set(top_k["ticker"].astype(str))
+    full_scores["model_selected"] = full_scores["ticker"].astype(str).isin(selected)
+    full_scores["model_score"] = full_scores["score"]
+    full_scores["model_rank"] = full_scores["score_rank"]
+    full_scores["selected_topk"] = full_scores["model_selected"].astype(int)
+    full_scores = full_scores.sort_values(
+        ["passed_filters", "score", "ticker"],
+        ascending=[False, False, True],
+        na_position="last",
+    ).reset_index(drop=True)
+    top_k["model_selected"] = True
+    top_k["model_score"] = top_k["score"]
+    top_k["model_rank"] = top_k["score_rank"]
+
+    root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "fresh_start_scores": root / "fresh_start_scores.csv",
+        "fresh_start_top_k": root / "fresh_start_top_k.csv",
+        "scoring_contract": root / "fresh_start_scoring_contract.json",
+    }
+    collision = [str(path) for path in paths.values() if path.exists()]
+    if collision:
+        raise FileExistsError(f"fresh-start scoring artifacts already exist: {collision}")
+    full_scores.to_csv(paths["fresh_start_scores"], index=False, encoding="utf-8-sig")
+    top_k.to_csv(paths["fresh_start_top_k"], index=False, encoding="utf-8-sig")
+    metadata = {
+        "contract": "FRESH_START_SCORING_PARAMETERIZED_V1",
+        "strategy_name": strategy_name,
+        "information_asof": str(pd.Timestamp(information_asof).date()),
+        "target_date": str(target_dt.date()),
+        "holding_bonus": 0.0,
+        "keep_current_top_n": 0,
+        "current_membership_used": False,
+        "portfolio_size": portfolio_size,
+        "eligible_rows": int(len(eligible_scores)),
+        "selected_rows": int(len(top_k)),
+        "quality_soft_penalty": quality_penalty_cfg,
+        "ai_overlay_active": bool(overlay is not None),
+    }
+    paths["scoring_contract"].write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    return FreshStartScoringResult(full_scores, eligible_scores, top_k, metadata, paths)
+
+
+def collect_and_score_fresh_start_model(
+    *,
+    information_asof: str,
+    target_date: str | pd.Timestamp,
+    metric: str,
+    feature_versions: Mapping[str, Any],
+    strategy_config: Mapping[str, Any] | str | Path,
+    output_dir: str | Path,
+    collection_mode: str,
+    existing_certified_run: str | Path | None = None,
+) -> ModelCollectionResult:
+    """Invoke the established collection chain or project a certified source run."""
+
+    mode = str(collection_mode).strip().lower()
+    root = Path(output_dir)
+    root.mkdir(parents=True, exist_ok=True)
+    weights, filters, _, selection, strategy_name = _load_parameterized_strategy(strategy_config)
+    _ = weights
+    top_k_count = int(selection.get("portfolio_size", feature_versions.get("top_k", 10)))
+    if mode == "existing-certified-run":
+        if existing_certified_run is None:
+            raise ValueError("existing_certified_run is required for existing-certified-run mode")
+        source_root = Path(existing_certified_run)
+        manifest_path = source_root / "run_manifest.json"
+        if not manifest_path.is_file():
+            raise FileNotFoundError("certified source run requires run_manifest.json")
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        status = str(manifest.get("development_status") or manifest.get("status") or "")
+        if not status.startswith("PASS"):
+            raise RuntimeError(f"source model run is not certified: {status or 'UNKNOWN'}")
+        score_rows = [
+            row
+            for row in manifest.get("input_artifacts", [])
+            if row.get("role") == "production_scores" and row.get("path")
+        ]
+        if len(score_rows) != 1:
+            raise ValueError("certified source run must identify one production_scores artifact")
+        repository_root = next(
+            (
+                candidate
+                for candidate in (source_root, *source_root.parents)
+                if (candidate / "scripts").is_dir() and (candidate / "data").exists()
+            ),
+            None,
+        )
+        if repository_root is None:
+            raise RuntimeError("could not resolve certified source repository root")
+        source_scores_path = Path(str(score_rows[0]["path"]))
+        if not source_scores_path.is_absolute():
+            source_scores_path = repository_root / source_scores_path
+        if not source_scores_path.is_file():
+            raise FileNotFoundError(source_scores_path)
+        from scripts.advisor.score_parity_v2 import (
+            build_score_parity_bundle_from_paths,
+            write_score_parity_artifacts,
+        )
+
+        bundle = build_score_parity_bundle_from_paths(
+            source_scores_path,
+            filters=filters,
+            top_k=top_k_count,
+            require_drift_diagnosis=False,
+        )
+        paths = write_score_parity_artifacts(bundle, root)
+        certified_fresh_path = source_root / "fresh_start_scores.csv"
+        certified_top_path = source_root / "fresh_start_top_k.csv"
+        fresh_result = bundle.fresh_scores
+        top_result = bundle.fresh_top_k
+        if certified_fresh_path.is_file() and certified_top_path.is_file():
+            certified_fresh = pd.read_csv(certified_fresh_path, dtype={"ticker": str})
+            certified_top = pd.read_csv(certified_top_path, dtype={"ticker": str})
+            projected_core = bundle.fresh_top_k[["ticker", "model_rank", "model_score"]].copy()
+            certified_core = certified_top[["ticker", "model_rank", "model_score"]].copy()
+            if projected_core[["ticker", "model_rank"]].to_dict("records") != certified_core[["ticker", "model_rank"]].to_dict("records"):
+                raise RuntimeError("certified fresh Top-K ticker/rank differs from score projection")
+            score_difference = (
+                pd.to_numeric(projected_core["model_score"], errors="raise")
+                - pd.to_numeric(certified_core["model_score"], errors="raise")
+            ).abs().max()
+            if float(score_difference) > 1e-12:
+                raise RuntimeError("certified fresh Top-K score differs from score projection")
+            # Preserve the immutable certified projection bytes for exact replay;
+            # the parity bundle above proves they represent the production score.
+            shutil.copyfile(certified_fresh_path, paths["fresh_start_scores"])
+            shutil.copyfile(certified_top_path, paths["fresh_start_top_k"])
+            fresh_result = certified_fresh
+            top_result = certified_top
+        metadata = {
+            "contract": "FRESH_START_MODEL_COLLECTION_V1",
+            "collection_mode": mode,
+            "source_run_certification": status,
+            "strategy_name": strategy_name,
+            "information_asof": str(pd.Timestamp(information_asof).date()),
+            "target_date": str(pd.Timestamp(target_date).date()),
+            "holding_bonus": 0.0,
+            "keep_current_top_n": 0,
+            "current_membership_used": False,
+        }
+        metadata_path = root / "model_collection_result.json"
+        metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        paths["model_collection_result"] = metadata_path
+        return ModelCollectionResult(mode, fresh_result, top_result, metadata, paths)
+
+    if mode != "collect":
+        raise ValueError("collection_mode must be collect or existing-certified-run")
+    prepare_script = Path(REPO_ROOT) / "scripts/data_pipeline/prepare_asof.py"
+    if not prepare_script.is_file():
+        raise FileNotFoundError(prepare_script)
+    python_executable = Path(REPO_ROOT) / ".venv/Scripts/python.exe"
+    if not python_executable.is_file():
+        python_executable = Path(sys.executable)
+    command = [
+        str(python_executable),
+        str(prepare_script),
+        "--asof", str(information_asof),
+        "--metric", str(metric),
+    ]
+    option_map = {
+        "universe_v": "--universe_v",
+        "mcap_top": "--mcap_top",
+        "trd_bot": "--trd_bot",
+        "px_v": "--px_v",
+        "ret_v": "--ret_v",
+        "lookback_years": "--lookback_years",
+        "start": "--start",
+        "fund_v": "--fund_v",
+        "factor_in_v": "--factor_in_v",
+        "factor_out_v": "--factor_out_v",
+        "fs_div": "--fs_div",
+        "shares_out_v": "--shares_out_v",
+        "fund_mode": "--fund_mode",
+    }
+    for key, option in option_map.items():
+        if key in feature_versions:
+            command.extend([option, str(feature_versions[key])])
+    for key, option in (
+        ("with_shares_industry", "--with_shares_industry"),
+        ("allow_fallback", "--allow_fallback"),
+    ):
+        if bool(feature_versions.get(key, False)):
+            command.append(option)
+    subprocess.run(command, cwd=REPO_ROOT, check=True)
+
+    feature_version = int(feature_versions.get("feat_v", feature_versions.get("factor_out_v", 2)))
+    prepared, _, prepared_path = prepare_features(str(information_asof), str(metric), feature_version)
+    universe_version = int(feature_versions.get("universe_v", 1))
+    universe_candidates = sorted((Path(REPO_ROOT) / "data/processed").glob(
+        f"universe__asof={information_asof}__*__v={universe_version}.parquet"
+    ))
+    market_candidates = sorted((Path(REPO_ROOT) / "data/processed").glob(
+        f"krx_marketdata__asof={information_asof}__v=*.parquet"
+    ))
+    if not universe_candidates or not market_candidates:
+        raise RuntimeError("collect mode upstream artifacts are incomplete")
+    scoring = run_fresh_start_scoring_pipeline(
+        prepared_features=prepared,
+        certified_universe=universe_candidates[-1],
+        marketdata=market_candidates[-1],
+        strategy_config=strategy_config,
+        information_asof=information_asof,
+        target_date=target_date,
+        output_dir=root,
+        holding_bonus=0.0,
+        keep_current_top_n=0,
+        current_holdings=None,
+        ignore_current_membership=True,
+    )
+    metadata = dict(scoring.metadata)
+    metadata.update(
+        {
+            "contract": "FRESH_START_MODEL_COLLECTION_V1",
+            "collection_mode": mode,
+            "prepared_features": str(prepared_path),
+        }
+    )
+    metadata_path = root / "model_collection_result.json"
+    metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    paths = dict(scoring.artifact_paths)
+    paths["model_collection_result"] = metadata_path
+    return ModelCollectionResult(mode, scoring.full_universe_scores, scoring.fresh_start_top_k, metadata, paths)
 
 
 def main():

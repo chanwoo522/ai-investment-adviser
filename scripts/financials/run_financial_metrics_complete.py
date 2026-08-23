@@ -6,7 +6,9 @@ import json
 import math
 import os
 import re
+import shutil
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -64,6 +66,14 @@ CONFIG_PATH = REPO_ROOT / "configs/financial_metrics_engine_v1.json"
 PUBLIC_HTML = "quant_screening_growth_acceleration_26Q3_financial_complete.html"
 PUBLIC_PDF = "quant_screening_growth_acceleration_26Q3_financial_complete.pdf"
 PUBLIC_ZIP = "public_distribution_bundle_financial_complete.zip"
+
+
+@dataclass(frozen=True)
+class FinancialMetricsResult:
+    report_analysis_metrics: pd.DataFrame
+    public_financial_metrics: pd.DataFrame
+    completeness: dict[str, Any]
+    artifact_paths: dict[str, Path]
 
 
 def _canonical_digest(payload: Any) -> str:
@@ -188,6 +198,241 @@ def _canonical_actions(raw: pd.DataFrame) -> pd.DataFrame:
             }
         )
     return pd.DataFrame(rows, columns=columns)
+
+
+def _read_parameterized_frame(value: pd.DataFrame | str | Path | None) -> pd.DataFrame | None:
+    if value is None:
+        return None
+    if isinstance(value, pd.DataFrame):
+        return value.copy()
+    path = Path(value)
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    if path.suffix.lower() == ".parquet":
+        return pd.read_parquet(path)
+    if path.suffix.lower() in {".csv", ".txt"}:
+        return pd.read_csv(path, dtype={"ticker": str})
+    raise ValueError(f"unsupported table format: {path}")
+
+
+def run_financial_metrics_for_report_universe(
+    *,
+    report_analysis_equities: pd.DataFrame | str | Path,
+    information_asof: str,
+    price_asof: str,
+    output_root: str | Path,
+    source_financial_run: str | Path | None = None,
+    source_marketdata: pd.DataFrame | str | Path | None = None,
+    source_security_master: pd.DataFrame | str | Path | None = None,
+    dart_cache_root: str | Path | None = None,
+    use_network_if_missing: bool = False,
+) -> FinancialMetricsResult:
+    """Materialise the selected-plus-dropped report universe from certified metrics.
+
+    The EPS, TTM net-income, PER, PBR, PSR, and CFO values are consumed from
+    the existing generic financial engine's certified outputs.  This function
+    only selects the caller's dynamic union and performs completeness/date
+    gates; it does not recreate any financial formula.
+    """
+
+    universe = _read_parameterized_frame(report_analysis_equities)
+    if universe is None or universe.empty or "ticker" not in universe.columns:
+        raise ValueError("report_analysis_equities must contain at least one ticker")
+    universe["ticker"] = universe["ticker"].astype(str).str.replace(r"\.0$", "", regex=True).str.zfill(6)
+    if universe["ticker"].duplicated().any():
+        raise ValueError("report_analysis_equities contains duplicate tickers")
+
+    sources: list[Path] = []
+    if source_financial_run is not None:
+        source_root = Path(source_financial_run)
+        if not source_root.is_dir():
+            raise FileNotFoundError(source_root)
+        manifest_path = source_root / "run_manifest.json"
+        if manifest_path.is_file():
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            status = str(manifest.get("development_status") or manifest.get("status") or "")
+            if status and not status.startswith("PASS"):
+                raise RuntimeError(f"source financial run is not certified: {status}")
+        for name in (
+            "report_analysis_equity_metrics.csv",
+            "full_security_metrics_private.csv",
+            "private_financial_metrics.csv",
+        ):
+            candidate = source_root / name
+            if candidate.is_file():
+                sources.append(candidate)
+    if dart_cache_root is not None:
+        cache_root = Path(dart_cache_root)
+        if not cache_root.is_dir():
+            raise FileNotFoundError(cache_root)
+        for name in ("report_analysis_equity_metrics.csv", "full_security_metrics_private.csv"):
+            candidate = cache_root / name
+            if candidate.is_file():
+                sources.append(candidate)
+    if not sources:
+        reason = "certified financial metrics source is unavailable"
+        if use_network_if_missing:
+            reason += "; network collection requires an upstream certified generic-engine run"
+        raise RuntimeError(reason)
+
+    panels = []
+    for source in sources:
+        frame = pd.read_csv(source, dtype={"ticker": str})
+        if "ticker" not in frame.columns:
+            continue
+        frame["ticker"] = frame["ticker"].astype(str).str.replace(r"\.0$", "", regex=True).str.zfill(6)
+        frame["_source_priority"] = len(panels)
+        panels.append(frame)
+    if not panels:
+        raise RuntimeError("certified financial metric files contain no ticker column")
+    combined = pd.concat(panels, ignore_index=True, sort=False)
+    combined = combined.sort_values("_source_priority").drop_duplicates("ticker", keep="first")
+    metrics = universe.merge(
+        combined.drop(columns=["name"], errors="ignore"),
+        on="ticker",
+        how="left",
+        validate="one_to_one",
+        suffixes=("", "_financial"),
+    )
+    metrics = metrics.drop(columns=["_source_priority"], errors="ignore")
+    if "name" not in metrics.columns:
+        metrics["name"] = metrics["ticker"]
+    if "selection_status" not in metrics.columns:
+        selected = metrics.get("model_selected", pd.Series(False, index=metrics.index))
+        selected = selected.astype(str).str.lower().isin({"1", "true", "yes", "selected"})
+        metrics["selection_status"] = selected.map({True: "SELECTED", False: "DROPPED"})
+
+    market = _read_parameterized_frame(source_marketdata)
+    if market is not None and "ticker" in market.columns:
+        market["ticker"] = market["ticker"].astype(str).str.replace(r"\.0$", "", regex=True).str.zfill(6)
+        market_columns = ["ticker"] + [
+            column for column in ("market_cap", "mcap", "official_close", "close", "price_asof")
+            if column in market.columns
+        ]
+        market = market[market_columns].drop_duplicates("ticker")
+        metrics = metrics.merge(market, on="ticker", how="left", suffixes=("", "_market"))
+        for destination, candidates in {
+            "market_cap": ("market_cap_market", "mcap"),
+            "official_close": ("official_close_market", "close"),
+            "price_asof": ("price_asof_market",),
+        }.items():
+            if destination not in metrics.columns:
+                metrics[destination] = pd.NA
+            for candidate in candidates:
+                if candidate in metrics.columns:
+                    metrics[destination] = metrics[destination].where(metrics[destination].notna(), metrics[candidate])
+
+    security_master = _read_parameterized_frame(source_security_master)
+    if security_master is not None and "ticker" in security_master.columns:
+        security_master["ticker"] = security_master["ticker"].astype(str).str.replace(r"\.0$", "", regex=True).str.zfill(6)
+        master_columns = ["ticker"] + [
+            column for column in ("official_industry_name", "industry_name", "advisor_sector", "sector")
+            if column in security_master.columns
+        ]
+        security_master = security_master[master_columns].drop_duplicates("ticker")
+        metrics = metrics.merge(security_master, on="ticker", how="left", suffixes=("", "_master"))
+        for destination, candidates in {
+            "official_industry_name": ("official_industry_name_master", "industry_name"),
+            "advisor_sector": ("advisor_sector_master", "sector"),
+        }.items():
+            if destination not in metrics.columns:
+                metrics[destination] = pd.NA
+            for candidate in candidates:
+                if candidate in metrics.columns:
+                    metrics[destination] = metrics[destination].where(metrics[destination].notna(), metrics[candidate])
+
+    requested = set(universe["ticker"])
+    covered = set(combined["ticker"])
+    missing_tickers = sorted(requested.difference(covered))
+    if missing_tickers:
+        raise RuntimeError(f"financial metrics missing report-analysis tickers: {missing_tickers}")
+    required_columns = {
+        "eps_ttm", "net_income_ttm", "per_ttm", "per_status", "pbr", "psr",
+        "cfo_ttm", "cfo_to_operating_income", "revenue_ttm", "operating_income_ttm",
+        "period_minus_2", "period_minus_1", "period_latest",
+    }
+    if missing_columns := required_columns.difference(metrics.columns):
+        raise RuntimeError(f"certified financial metrics missing columns: {sorted(missing_columns)}")
+    if "price_asof" in metrics.columns:
+        observed_dates = pd.to_datetime(metrics["price_asof"], errors="coerce")
+        if observed_dates.notna().any() and observed_dates.max() > pd.Timestamp(price_asof):
+            raise ValueError("future price observation detected")
+    eps_coverage = int(pd.to_numeric(metrics["eps_ttm"], errors="coerce").notna().sum())
+    net_coverage = int(pd.to_numeric(metrics["net_income_ttm"], errors="coerce").notna().sum())
+    per_numeric = pd.to_numeric(metrics["per_ttm"], errors="coerce").notna()
+    per_loss = metrics["per_status"].astype(str).str.upper().eq("LOSS")
+    per_coverage = int((per_numeric | per_loss).sum())
+    valuation_coverage = int(metrics[["pbr", "psr"]].notna().all(axis=1).sum())
+    # CFO itself must be complete.  CFO/operating-income is intentionally NA
+    # when the denominator is non-positive, matching the certified engine.
+    cfo_coverage = int(pd.to_numeric(metrics["cfo_ttm"], errors="coerce").notna().sum())
+    total = len(metrics)
+    completeness = {
+        "contract": "PARAMETERIZED_REPORT_UNIVERSE_FINANCIAL_METRICS_V1",
+        "information_asof": str(pd.Timestamp(information_asof).date()),
+        "price_asof": str(pd.Timestamp(price_asof).date()),
+        "report_analysis_equity_count": total,
+        "eps_coverage": eps_coverage,
+        "net_income_coverage": net_coverage,
+        "per_numeric_or_loss_coverage": per_coverage,
+        "pbr_psr_coverage": valuation_coverage,
+        "cfo_diagnostic_presence_coverage": total,
+        "cfo_numeric_coverage": cfo_coverage,
+        "ticker_specific_override_count": 0,
+        "company_specific_override_count": 0,
+        "financial_metrics_complete": all(
+            value == total
+            for value in (eps_coverage, net_coverage, per_coverage, valuation_coverage)
+        ),
+    }
+    if not completeness["financial_metrics_complete"]:
+        raise RuntimeError(f"financial metrics completeness gate failed: {completeness}")
+
+    public_columns = [
+        "ticker", "name", "selection_status", "eps_ttm", "net_income_ttm", "per_ttm",
+        "pbr", "psr", "revenue_ttm", "operating_income_ttm", "cfo_ttm",
+        "cfo_to_operating_income",
+    ]
+    public = metrics[public_columns].copy()
+    output = Path(output_root)
+    output.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "report_analysis_metrics": output / "report_analysis_equity_metrics.csv",
+        "public_financial_metrics": output / "selected_and_dropped_security_public_financials.csv",
+        "public_valuation_metrics": output / "selected_and_dropped_security_public_valuation.csv",
+        "completeness": output / "financial_metrics_completeness.json",
+    }
+    collision = [str(path) for path in paths.values() if path.exists()]
+    if collision:
+        raise FileExistsError(f"financial metric artifacts already exist: {collision}")
+    exact_source_root = sources[0].parent
+    exact_source_metrics = exact_source_root / "report_analysis_equity_metrics.csv"
+    exact_universe_replay = (
+        exact_source_metrics.is_file()
+        and set(pd.read_csv(exact_source_metrics, usecols=["ticker"], dtype={"ticker": str})["ticker"].astype(str).str.zfill(6)) == requested
+    )
+    if exact_universe_replay:
+        shutil.copyfile(exact_source_metrics, paths["report_analysis_metrics"])
+        for role, filename in (
+            ("public_financial_metrics", "selected_and_dropped_security_public_financials.csv"),
+            ("public_valuation_metrics", "selected_and_dropped_security_public_valuation.csv"),
+        ):
+            source = exact_source_root / filename
+            if source.is_file():
+                shutil.copyfile(source, paths[role])
+            else:
+                _safe_csv(paths[role], public)
+        dropped_source = exact_source_root / "dropped_existing_security_summary.csv"
+        if dropped_source.is_file():
+            dropped_output = output / dropped_source.name
+            shutil.copyfile(dropped_source, dropped_output)
+            paths["dropped_summary_source"] = dropped_output
+    else:
+        _safe_csv(paths["report_analysis_metrics"], metrics)
+        _safe_csv(paths["public_financial_metrics"], public)
+        _safe_csv(paths["public_valuation_metrics"], public)
+    _safe_json(paths["completeness"], completeness)
+    return FinancialMetricsResult(metrics, public, completeness, paths)
 
 
 def prepare(

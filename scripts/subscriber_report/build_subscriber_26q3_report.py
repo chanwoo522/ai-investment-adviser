@@ -18,6 +18,7 @@ import os
 import re
 import shutil
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -37,7 +38,13 @@ from scripts.advisor.immutable_run import (  # noqa: E402
     relative_artifact_manifest,
     sha256_file,
 )
+from scripts.live.calc_live_performance import (  # noqa: E402
+    build_monthly_portfolio_performance,
+)
 from scripts.qa.render_public_report import render_public_report  # noqa: E402
+from scripts.subscriber_report.subscriber_bundle import (  # noqa: E402
+    build_public_distribution_bundle,
+)
 
 
 REPORT_CONTRACT = "SUBSCRIBER_QUARTERLY_REBALANCING_REPORT_V2"
@@ -135,6 +142,14 @@ PUBLIC_FORBIDDEN = (
     "현재 계좌 구성(계속)",
     "목표 비중과 목표금액(계속)",
 )
+
+
+@dataclass(frozen=True)
+class SubscriberReportResult:
+    html_path: Path
+    html: str
+    chart_paths: dict[str, Path]
+    metadata: dict[str, Any]
 
 
 def _utc_now() -> datetime:
@@ -438,89 +453,19 @@ def _build_performance(
     krx300: pd.DataFrame,
     names: dict[str, str],
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
-    evidence = evidence.copy()
-    evidence["ticker"] = evidence["ticker"].map(_ticker)
-    evidence["shares"] = pd.to_numeric(evidence["shares"], errors="raise")
-    evidence["position_value"] = pd.to_numeric(evidence["position_value"], errors="raise")
-    start_nav = float(evidence["position_value"].sum())
-    common_dates = _common_dates(prices, krx300)
-    qty = evidence.set_index("ticker")["shares"]
-    price_wide = prices.pivot(index="date", columns="ticker", values="close")
-    index_map = krx300.set_index("date")["krx300_price_index"]
-    index_start = float(index_map.loc[PERFORMANCE_START])
-    rows: list[dict[str, Any]] = []
-    previous_nav = start_nav
-    previous_equiv = start_nav
-    previous_index = index_start
-    for position, date in enumerate(common_dates):
-        if position == 0:
-            nav = start_nav
-        else:
-            nav = float((price_wide.loc[date, list(TRACKED_TICKERS)] * qty).sum())
-        index_level = float(index_map.loc[date])
-        equiv = start_nav * index_level / index_start
-        rows.append(
-            {
-                "date": date.strftime("%Y-%m-%d") + ("(부분월)" if date == PERFORMANCE_END else ""),
-                "date_iso": date.strftime("%Y-%m-%d"),
-                "portfolio_nav": round(nav),
-                "portfolio_change_amount": round(nav - previous_nav) if position else 0,
-                "portfolio_monthly_change_rate": nav / previous_nav - 1 if position else 0.0,
-                "portfolio_cumulative_change_rate": nav / start_nav - 1 if position else 0.0,
-                "krx300_price_index": index_level,
-                "krx300_equivalent_nav": round(equiv),
-                "krx300_change_amount": round(equiv - previous_equiv) if position else 0,
-                "krx300_monthly_change_rate": index_level / previous_index - 1 if position else 0.0,
-                "krx300_cumulative_change_rate": index_level / index_start - 1 if position else 0.0,
-                "cumulative_excess_return": (nav / start_nav - 1) - (index_level / index_start - 1),
-            }
-        )
-        previous_nav = nav
-        previous_equiv = equiv
-        previous_index = index_level
-    monthly = pd.DataFrame(rows)
-
-    end_prices = price_wide.loc[PERFORMANCE_END]
-    security_rows = []
-    for item in evidence.itertuples(index=False):
-        ticker = _ticker(item.ticker)
-        start_value = float(item.position_value)
-        end_value = float(item.shares) * float(end_prices.loc[ticker])
-        security_rows.append(
-            {
-                "ticker": ticker,
-                "name": names[ticker],
-                "quantity": int(item.shares),
-                "start_value": round(start_value),
-                "end_value": round(end_value),
-                "change_amount": round(end_value - start_value),
-                "change_rate": end_value / start_value - 1,
-                "start_date": PERFORMANCE_START.strftime("%Y-%m-%d"),
-                "end_date": PERFORMANCE_END.strftime("%Y-%m-%d"),
-                "end_official_close": float(end_prices.loc[ticker]),
-            }
-        )
-    security = pd.DataFrame(security_rows).sort_values("change_rate", ascending=False).reset_index(drop=True)
-    start_error = abs(float(security["start_value"].sum()) - float(monthly.iloc[0]["portfolio_nav"]))
-    end_error = abs(float(security["end_value"].sum()) - float(monthly.iloc[-1]["portfolio_nav"]))
-    change_error = abs(
-        float(security["change_amount"].sum())
-        - (float(monthly.iloc[-1]["portfolio_nav"]) - float(monthly.iloc[0]["portfolio_nav"]))
+    starting_positions = evidence.copy()
+    starting_positions["ticker"] = starting_positions["ticker"].map(_ticker)
+    starting_positions["name"] = starting_positions["ticker"].map(names)
+    result = build_monthly_portfolio_performance(
+        starting_positions=starting_positions,
+        official_equity_prices=prices,
+        official_krx300=krx300,
+        performance_start=PERFORMANCE_START,
+        performance_end=PERFORMANCE_END,
+        activity_ledger=None,
+        require_quantity_parity=True,
     )
-    qa = {
-        "start_nav_basis": "ACTUAL_POST_TRADE_POSITION_VALUE",
-        "common_dates": [date.strftime("%Y-%m-%d") for date in common_dates],
-        "equity_count": len(TRACKED_TICKERS),
-        "start_nav_reconciliation_error_krw": start_error,
-        "end_nav_reconciliation_error_krw": end_error,
-        "change_reconciliation_error_krw": change_error,
-        "reconciliation_status": "PASS" if max(start_error, end_error, change_error) <= 1 else "FAIL",
-        "fill_used": False,
-        "etf_proxy_used": False,
-    }
-    if qa["reconciliation_status"] != "PASS":
-        raise RuntimeError(f"performance reconciliation failed: {qa}")
-    return monthly, security, qa
+    return result.monthly_performance, result.security_returns, result.qa
 
 
 def _growth_label(previous: float | None, current: float | None, *, operating: bool) -> str:
@@ -729,7 +674,14 @@ def _line_chart(
     return "".join(parts)
 
 
-def _bar_chart(title: str, labels: list[str], portfolio: list[float], benchmark: list[float]) -> str:
+def _bar_chart(
+    title: str,
+    labels: list[str],
+    portfolio: list[float],
+    benchmark: list[float],
+    *,
+    partial_month_label: str = "8월은 부분월",
+) -> str:
     width, height = 940, 360
     left, right, top, bottom = 74, 30, 55, 70
     low = min(min(portfolio), min(benchmark), 0.0)
@@ -763,7 +715,7 @@ def _bar_chart(title: str, labels: list[str], portfolio: list[float], benchmark:
         [
             f'<rect x="{left}" y="{height-15}" width="14" height="8" fill="#1f6feb"/><text x="{left+20}" y="{height-7}" font-size="12" fill="#3f4a5a">포트폴리오</text>',
             f'<rect x="{left+125}" y="{height-15}" width="14" height="8" fill="#f08c46"/><text x="{left+145}" y="{height-7}" font-size="12" fill="#3f4a5a">KRX300</text>',
-            '<text x="900" y="30" text-anchor="end" font-size="12" font-weight="700" fill="#687386">8월은 부분월</text>',
+            f'<text x="900" y="30" text-anchor="end" font-size="12" font-weight="700" fill="#687386">{html.escape(partial_month_label)}</text>',
             "</svg>",
         ]
     )
@@ -1063,6 +1015,350 @@ footer { padding:10px 13mm 18mm; color:#788494; font-size:9px; }
 </main><footer>정량모형 기준일 {MODEL_ASOF} · 포트폴리오 평가일 {ACCOUNT_ASOF} · 공개 구독자용 자료</footer></body></html>'''
 
 
+def _parameterized_report_frame(value: pd.DataFrame | str | Path, *, name: str) -> pd.DataFrame:
+    if isinstance(value, pd.DataFrame):
+        return value.copy()
+    path = Path(value)
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    if path.suffix.lower() == ".parquet":
+        return pd.read_parquet(path)
+    if path.suffix.lower() in {".csv", ".txt"}:
+        return pd.read_csv(path, dtype={"ticker": str})
+    raise ValueError(f"unsupported {name} format: {path}")
+
+
+def _dynamic_chart_labels(monthly: pd.DataFrame) -> list[str]:
+    dates = pd.to_datetime(monthly["date_iso"], errors="raise")
+    labels: list[str] = []
+    for index, date in enumerate(dates):
+        partial = str(monthly.iloc[index]["date"]).endswith("(부분월)")
+        if index == 0:
+            label = f"{date.month}/{date.day}"
+        elif index == len(dates) - 1 and partial:
+            label = f"{date.month}/{date.day} 부분월"
+        else:
+            label = f"{date.month}월말"
+        labels.append(label)
+    return labels
+
+
+def _display_quarter_label(value: str) -> str:
+    match = re.fullmatch(r"(\d{2})Q([1-4])", str(value).strip(), flags=re.IGNORECASE)
+    if match is None:
+        return str(value)
+    return f"20{match.group(1)}년 {int(match.group(2))}분기"
+
+
+def _selected_details_for_historical_renderer(details: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    frame = details.copy()
+    if {"period_1", "period_2", "period_3"}.issubset(frame.columns):
+        selected_financials = frame.copy()
+    else:
+        required = {
+            "period_minus_2", "period_minus_1", "period_latest",
+            "revenue_previous", "revenue_minus_2", "revenue_minus_1", "revenue_latest",
+            "operating_income_previous", "operating_income_minus_2",
+            "operating_income_minus_1", "operating_income_latest",
+        }
+        if missing := required.difference(frame.columns):
+            raise ValueError(f"selected_details missing report fields: {sorted(missing)}")
+        selected_financials = pd.DataFrame(
+            {
+                "ticker": frame["ticker"],
+                "name": frame["name"],
+                "model_rank": frame["model_rank"],
+                "industry": frame.get("official_industry_name", frame.get("industry", "미분류")),
+                "sector": frame.get("advisor_sector", frame.get("sector", "미분류")),
+                "period_1": frame["period_minus_2"],
+                "period_2": frame["period_minus_1"],
+                "period_3": frame["period_latest"],
+                "revenue_1": frame["revenue_minus_2"],
+                "revenue_2": frame["revenue_minus_1"],
+                "revenue_3": frame["revenue_latest"],
+                "operating_income_1": frame["operating_income_minus_2"],
+                "operating_income_2": frame["operating_income_minus_1"],
+                "operating_income_3": frame["operating_income_latest"],
+                "market_cap": frame["market_cap"],
+                "cfo_ttm": frame["cfo_ttm"],
+                "cfo_to_operating_income": frame["cfo_to_operating_income"],
+                "quality_penalty": frame.get("quality_penalty", 0.0),
+                "quality_penalty_reason": frame.get("quality_penalty_status", "없음"),
+            }
+        )
+        selected_financials["revenue_growth_1"] = [
+            _growth_label(previous, current, operating=False)
+            for previous, current in zip(frame["revenue_previous"], frame["revenue_minus_2"])
+        ]
+        selected_financials["revenue_growth_2"] = [
+            _growth_label(previous, current, operating=False)
+            for previous, current in zip(frame["revenue_minus_2"], frame["revenue_minus_1"])
+        ]
+        selected_financials["revenue_growth_3"] = [
+            _growth_label(previous, current, operating=False)
+            for previous, current in zip(frame["revenue_minus_1"], frame["revenue_latest"])
+        ]
+        selected_financials["operating_income_growth_1"] = [
+            _growth_label(previous, current, operating=True)
+            for previous, current in zip(frame["operating_income_previous"], frame["operating_income_minus_2"])
+        ]
+        selected_financials["operating_income_growth_2"] = [
+            _growth_label(previous, current, operating=True)
+            for previous, current in zip(frame["operating_income_minus_2"], frame["operating_income_minus_1"])
+        ]
+        selected_financials["operating_income_growth_3"] = [
+            _growth_label(previous, current, operating=True)
+            for previous, current in zip(frame["operating_income_minus_1"], frame["operating_income_latest"])
+        ]
+    valuation = frame[["ticker"]].copy()
+    valuation["pbr"] = frame.get("pbr", pd.Series(pd.NA, index=frame.index))
+    valuation["psr"] = frame.get("psr", pd.Series(pd.NA, index=frame.index))
+    return selected_financials, valuation
+
+
+def generate_subscriber_quarterly_report(
+    *,
+    quarter_label: str,
+    report_title: str,
+    model_information_asof: str,
+    account_asof: str,
+    performance_start: str | pd.Timestamp,
+    performance_end: str | pd.Timestamp,
+    benchmark_name: str,
+    current_portfolio: pd.DataFrame | str | Path,
+    monthly_performance: pd.DataFrame | str | Path,
+    security_returns: pd.DataFrame | str | Path,
+    fresh_start_top_k: pd.DataFrame | str | Path,
+    boundary_watchlist: pd.DataFrame | str | Path,
+    target_portfolio: pd.DataFrame | str | Path,
+    current_vs_target: pd.DataFrame | str | Path,
+    selected_details: pd.DataFrame | str | Path,
+    dropped_summary: pd.DataFrame | str | Path,
+    dropped_details: pd.DataFrame | str | Path,
+    output_html: str | Path,
+) -> SubscriberReportResult:
+    """Render a quarterly subscriber report through the historical HTML/CSS engine."""
+
+    current = _parameterized_report_frame(current_portfolio, name="current_portfolio")
+    monthly = _parameterized_report_frame(monthly_performance, name="monthly_performance")
+    returns = _parameterized_report_frame(security_returns, name="security_returns")
+    top_k = _parameterized_report_frame(fresh_start_top_k, name="fresh_start_top_k")
+    boundary = _parameterized_report_frame(boundary_watchlist, name="boundary_watchlist")
+    target = _parameterized_report_frame(target_portfolio, name="target_portfolio")
+    comparison = _parameterized_report_frame(current_vs_target, name="current_vs_target")
+    selected = _parameterized_report_frame(selected_details, name="selected_details")
+    dropped_summary_frame = _parameterized_report_frame(dropped_summary, name="dropped_summary")
+    dropped_detail_frame = _parameterized_report_frame(dropped_details, name="dropped_details")
+    _ = dropped_summary_frame
+
+    if "market_value" not in current.columns and "current_value" in current.columns:
+        current["market_value"] = current["current_value"]
+    if "quantity" not in current.columns and "current_qty" in current.columns:
+        current["quantity"] = current["current_qty"]
+    if "price_per_share" not in current.columns:
+        current["price_per_share"] = pd.to_numeric(current["market_value"], errors="raise") / pd.to_numeric(current["quantity"], errors="raise")
+    if "equity_weight" not in current.columns:
+        current["equity_weight"] = current["market_value"] / float(current["market_value"].sum())
+    if "valuation_date" not in current.columns:
+        current["valuation_date"] = str(pd.Timestamp(account_asof).date())
+    current = current.sort_values(
+        ["market_value", "ticker"], ascending=[False, True], kind="mergesort"
+    ).reset_index(drop=True)
+    if "transition_status" not in top_k.columns:
+        transition = comparison.set_index("ticker")["transition_status"]
+        top_k["transition_status"] = top_k["ticker"].map(transition)
+    if "quality_penalty" not in top_k.columns:
+        top_k["quality_penalty"] = top_k.get("quality_penalty_total", 0.0)
+    if "advisor_sector" not in top_k.columns:
+        sector_candidate = next(
+            (column for column in ("advisor_sector_y", "advisor_sector_x", "sector") if column in top_k.columns),
+            None,
+        )
+        top_k["advisor_sector"] = top_k[sector_candidate] if sector_candidate else "미분류"
+    if "advisor_sector" not in target.columns:
+        sector_candidate = next(
+            (column for column in ("advisor_sector_y", "advisor_sector_x", "sector") if column in target.columns),
+            None,
+        )
+        target["advisor_sector"] = target[sector_candidate] if sector_candidate else "미분류"
+    selected_financials, selected_valuation = _selected_details_for_historical_renderer(selected)
+
+    labels = _dynamic_chart_labels(monthly)
+    nav_chart = _line_chart(
+        "포트폴리오 NAV와 KRX300 환산 NAV",
+        labels,
+        [
+            ("포트폴리오 NAV", monthly["portfolio_nav"].astype(float).tolist(), "#1f6feb"),
+            ("KRX300 환산 NAV", monthly["krx300_equivalent_nav"].astype(float).tolist(), "#f08c46"),
+        ],
+        value_formatter=lambda value: f"{value / 1_000_000:.1f}백만원",
+    )
+    end = pd.Timestamp(performance_end).normalize()
+    partial_label = f"{end.month}월은 부분월" if str(monthly.iloc[-1]["date"]).endswith("(부분월)") else ""
+    monthly_chart = _bar_chart(
+        "월별 증감률 비교",
+        labels,
+        monthly["portfolio_monthly_change_rate"].astype(float).tolist(),
+        monthly["krx300_monthly_change_rate"].astype(float).tolist(),
+        partial_month_label=partial_label,
+    )
+    cumulative_chart = _line_chart(
+        "누적 증감률 비교",
+        labels,
+        [
+            ("포트폴리오 누적 증감률", monthly["portfolio_cumulative_change_rate"].astype(float).tolist(), "#1f6feb"),
+            ("KRX300 누적 증감률", monthly["krx300_cumulative_change_rate"].astype(float).tolist(), "#f08c46"),
+        ],
+        value_formatter=lambda value: f"{value * 100:.1f}%",
+        annotation=f"최종 누적 초과수익률 {_fmt_pct(monthly.iloc[-1]['cumulative_excess_return'])}",
+    )
+    charts = {
+        "portfolio_nav_vs_krx300.svg": nav_chart,
+        "monthly_change_rate_comparison.svg": monthly_chart,
+        "cumulative_change_rate_comparison.svg": cumulative_chart,
+    }
+
+    global REPORT_TITLE, MODEL_ASOF, ACCOUNT_ASOF
+    prior_globals = (REPORT_TITLE, MODEL_ASOF, ACCOUNT_ASOF)
+    REPORT_TITLE = report_title
+    MODEL_ASOF = str(pd.Timestamp(model_information_asof).date())
+    ACCOUNT_ASOF = str(pd.Timestamp(account_asof).date())
+    try:
+        document = _render_html(
+            current=current,
+            monthly=monthly,
+            security_returns=returns,
+            topk=top_k,
+            boundary=boundary,
+            target=target,
+            current_vs_target=comparison,
+            selected_financials=selected_financials,
+            selected_valuation=selected_valuation,
+            charts=charts,
+        )
+    finally:
+        REPORT_TITLE, MODEL_ASOF, ACCOUNT_ASOF = prior_globals
+
+    start = pd.Timestamp(performance_start).normalize()
+    current_count = int(len(current))
+    selected_count = int(len(top_k))
+    cash_rows = target.loc[target["ticker"].astype(str).eq("CASH_EQUIVALENT_BUCKET")]
+    cash_weight = float(cash_rows["target_weight"].sum()) if not cash_rows.empty else 0.0
+    document = re.sub(r"성과 평가기간: [^<]+", f"성과 평가기간: {start.date()} ~ {end.date()}", document)
+    document = re.sub(
+        r"리밸런싱 대상: [^<]+",
+        f"리밸런싱 대상: {html.escape(_display_quarter_label(quarter_label))}",
+        document,
+    )
+    document = re.sub(r"벤치마크: KRX300 가격지수", f"벤치마크: {html.escape(benchmark_name)} 가격지수", document)
+    document = document.replace(f"{len(TRACKED_TICKERS)}종목", f"{current_count}종목")
+    document = re.sub(
+        r"\d+개 주식의 시작수량과 현재수량이 모두 일치해",
+        f"{current_count}개 주식의 시작수량과 현재수량이 모두 일치해",
+        document,
+    )
+    document = re.sub(r"본 성과는 \d{4}년 \d{1,2}월 \d{1,2}일에", f"본 성과는 {start.year}년 {start.month}월 {start.day}일에", document)
+    document = re.sub(r"\d{4}년 \d{1,2}월 \d{1,2}일 이후 종목별 수익률", f"{start.year}년 {start.month}월 {start.day}일 이후 종목별 수익률", document)
+    document = re.sub(r"\d+월 \d+일부터 \d+월 \d+일까지", f"{start.month}월 {start.day}일부터 {end.month}월 {end.day}일까지", document)
+    document = re.sub(r"정량 점수 상위 \d+개를", f"정량 점수 상위 {selected_count}개를", document)
+    document = re.sub(
+        r"주식 \d+%, 현금성 \d+%를",
+        f"주식 {(1.0 - cash_weight) * 100:.0f}%, 현금성 {cash_weight * 100:.0f}%를",
+        document,
+    )
+    document = re.sub(r"\d+위와 \d+위 점수 차", f"{selected_count}위와 {selected_count + 1}위 점수 차", document)
+    document = re.sub(r"\d+위와의 점수차", f"{selected_count}위와의 점수차", document)
+
+    if {"eps_ttm", "net_income_ttm", "per_status"}.issubset(selected.columns):
+        enriched = BeautifulSoup(document, "html.parser")
+        by_ticker = selected.set_index("ticker")
+        for card in enriched.select(".security-card"):
+            ticker_node = card.select_one(".security-heading small")
+            if ticker_node is None:
+                continue
+            ticker = ticker_node.get_text(" ", strip=True)
+            if ticker not in by_ticker.index:
+                continue
+            row = by_ticker.loc[ticker]
+            metric_values = {
+                "EPS": f"{float(row['eps_ttm']):,.0f}원",
+                "당기순이익": f"{_fmt_eok(row['net_income_ttm'])} · 최근 4개 분기 합계",
+                "PER": (
+                    "적자"
+                    if str(row.get("per_status", "")).upper() == "LOSS"
+                    else f"{float(row['per_ttm']):,.2f}배"
+                ),
+            }
+            for metric in card.select(".metric"):
+                label = metric.find("span")
+                value = metric.find("strong")
+                if label is not None and value is not None:
+                    replacement = metric_values.get(label.get_text(" ", strip=True))
+                    if replacement is not None:
+                        value.string = replacement
+            note = card.select_one(".formula-note")
+            if note is not None:
+                note.decompose()
+        # Preserve the historical financial-enrichment serialization layer.
+        document = "<!doctype html>\n" + str(enriched)
+
+    presentation_columns = {
+        "selection_status",
+        "model_rank",
+        "model_score",
+        "public_rank",
+        "public_score",
+        "public_reason",
+        "reason_code",
+        "current_qty",
+        "current_value",
+    }
+    if presentation_columns.issubset(selected.columns) and presentation_columns.issubset(
+        dropped_detail_frame.columns
+    ):
+        from scripts.subscriber_report.run_full_security_details import (
+            enrich_full_security_report_html,
+        )
+
+        full_metrics = pd.concat(
+            [selected, dropped_detail_frame], ignore_index=True, sort=False
+        )
+        if full_metrics["ticker"].duplicated().any():
+            raise ValueError("selected and dropped report detail tickers overlap")
+        document, _ = enrich_full_security_report_html(
+            parent_document=document,
+            metrics=full_metrics,
+            dropped=dropped_detail_frame,
+        )
+
+    output = Path(output_html)
+    if output.exists():
+        raise FileExistsError(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    _safe_text(output, document)
+    chart_paths: dict[str, Path] = {}
+    for filename, content in charts.items():
+        path = output.parent / "charts" / filename
+        if path.exists():
+            if path.read_text(encoding="utf-8") != content:
+                raise RuntimeError(f"existing chart differs from parameterized chart: {path}")
+        else:
+            _safe_text(path, content)
+        chart_paths[filename] = path
+    metadata = {
+        "contract": "PARAMETERIZED_SUBSCRIBER_QUARTERLY_REPORT_V1",
+        "quarter_label": quarter_label,
+        "report_title": report_title,
+        "model_information_asof": str(pd.Timestamp(model_information_asof).date()),
+        "account_asof": str(pd.Timestamp(account_asof).date()),
+        "performance_start": str(start.date()),
+        "performance_end": str(end.date()),
+        "selected_count": selected_count,
+        "dropped_count": int(len(comparison.loc[comparison["transition_status"].eq("DROPPED")])),
+    }
+    return SubscriberReportResult(output, document, chart_paths, metadata)
+
+
 def _html_qa(document: str) -> dict[str, Any]:
     soup = BeautifulSoup(document, "html.parser")
     h2 = [node.get_text(" ", strip=True) for node in soup.find_all("h2") if node.get_text(" ", strip=True) != "Compliance Notice"]
@@ -1210,20 +1506,35 @@ def prepare(run_id: str) -> Path:
         for filename, content in charts.items():
             _safe_text(staging / "charts" / filename, content)
 
-        document = _render_html(
-            current=current,
-            monthly=monthly,
-            security_returns=security_returns,
-            topk=topk,
-            boundary=boundary,
-            target=topk_raw,
-            current_vs_target=comparison,
-            selected_financials=selected_financials,
-            selected_valuation=selected_valuation,
-            charts=charts,
-        )
         html_path = staging / "quant_screening_growth_acceleration_26Q3.html"
-        _safe_text(html_path, document)
+        selected_details = selected_financials.merge(
+            selected_valuation[["ticker", "pbr", "psr"]],
+            on="ticker",
+            how="left",
+            validate="one_to_one",
+        )
+        dropped = comparison.loc[comparison["transition_status"].eq("DROPPED")].copy()
+        report_result = generate_subscriber_quarterly_report(
+            quarter_label="2026년 3분기",
+            report_title=REPORT_TITLE,
+            model_information_asof=MODEL_ASOF,
+            account_asof=ACCOUNT_ASOF,
+            performance_start=PERFORMANCE_START,
+            performance_end=PERFORMANCE_END,
+            benchmark_name="KRX300",
+            current_portfolio=current,
+            monthly_performance=monthly,
+            security_returns=security_returns,
+            fresh_start_top_k=topk,
+            boundary_watchlist=boundary,
+            target_portfolio=topk_raw,
+            current_vs_target=comparison,
+            selected_details=selected_details,
+            dropped_summary=dropped,
+            dropped_details=dropped,
+            output_html=html_path,
+        )
+        document = report_result.html
         html_qa = _html_qa(document)
         if html_qa["status"] != "PASS":
             raise RuntimeError(f"public HTML QA failed: {html_qa['failed_checks']}")
@@ -1387,9 +1698,6 @@ def finalize(run_id: str, *, inspection_path: Path) -> Path:
         encoding="utf-8",
     )
 
-    bundle = staging / "public_distribution_bundle.zip"
-    if bundle.exists():
-        raise FileExistsError(bundle)
     members = (
         "quant_screening_growth_acceleration_26Q3.html",
         "quant_screening_growth_acceleration_26Q3.pdf",
@@ -1397,9 +1705,12 @@ def finalize(run_id: str, *, inspection_path: Path) -> Path:
         "security_return_evaluation_20260401_20260820.csv",
         "SUBSCRIBER_REPORT_QA.md",
     )
-    with ZipFile(bundle, "x", compression=ZIP_DEFLATED, compresslevel=9) as archive:
-        for member in members:
-            archive.write(staging / member, member)
+    build_public_distribution_bundle(
+        output_path=staging / "public_distribution_bundle.zip",
+        public_files={member: staging / member for member in members},
+        allowed_suffixes=(".html", ".pdf", ".csv", ".md"),
+        forbidden_patterns=tuple(re.escape(term) for term in PUBLIC_FORBIDDEN),
+    )
 
     inputs = json.loads((staging / "subscriber_report_inputs_manifest.json").read_text(encoding="utf-8"))
     parent_after = _digest_tree(PARENT_ROOT)

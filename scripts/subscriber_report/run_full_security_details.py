@@ -7,6 +7,7 @@ import math
 import re
 import shutil
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
@@ -53,6 +54,9 @@ from scripts.financials.resolve_reporting_periods import (  # noqa: E402
 )
 from scripts.financials.resolve_share_classes import resolve_share_classes  # noqa: E402
 from scripts.qa.render_public_report import render_public_report  # noqa: E402
+from scripts.subscriber_report.subscriber_bundle import (  # noqa: E402
+    build_public_distribution_bundle,
+)
 
 
 RUNS_ROOT = REPO_ROOT / "data/development/subscriber_full_security_details/runs"
@@ -62,6 +66,16 @@ PUBLIC_ZIP = "public_distribution_bundle_full_security_details.zip"
 INFORMATION_ASOF = "2026-08-18"
 PRICE_ASOF = "2026-08-18"
 TOP_K = 10
+
+
+@dataclass(frozen=True)
+class FullSecurityDetailsResult:
+    report_analysis_metrics: pd.DataFrame
+    selected_details: pd.DataFrame
+    dropped_summary: pd.DataFrame
+    dropped_details: pd.DataFrame
+    public_financial_metrics: pd.DataFrame
+    artifact_paths: dict[str, Path]
 
 FACTOR_FIELDS = (
     ("Debt_to_Equity_log__contrib", "부채비율 기여"),
@@ -1113,10 +1127,12 @@ def _not_selected_card(soup: BeautifulSoup, row: pd.Series) -> Any:
     return article
 
 
-def _build_public_report(
-    *, parent_html: Path, output_path: Path, metrics: pd.DataFrame, dropped: pd.DataFrame
-) -> dict[str, Any]:
-    soup = BeautifulSoup(parent_html.read_text(encoding="utf-8"), "html.parser")
+def enrich_full_security_report_html(
+    *, parent_document: str, metrics: pd.DataFrame, dropped: pd.DataFrame
+) -> tuple[str, dict[str, Any]]:
+    """Apply the historical full-security presentation to a caller-supplied report."""
+
+    soup = BeautifulSoup(parent_document, "html.parser")
     selected_metrics = metrics.loc[metrics["selection_status"].eq("선발")].set_index("ticker")
     for card in soup.select("#selected-details article.security-card"):
         ticker_node = card.select_one(".security-heading h3 small")
@@ -1153,6 +1169,8 @@ def _build_public_report(
             strong = item.select_one("strong")
             if label in public_values and strong is not None:
                 strong.string = public_values[label]
+        for note in card.select(".formula-note"):
+            note.decompose()
 
     section = soup.select_one("#dropped")
     if section is None:
@@ -1260,8 +1278,7 @@ def _build_public_report(
 """
     soup.style.append(extra_css)
     document = "<!doctype html>\n" + str(soup)
-    output_path.write_text(document, encoding="utf-8")
-    return {
+    qa = {
         "selected_card_count": len(soup.select("#selected-details article.security-card")),
         "dropped_card_count": len(
             soup.select("#not-selected-details article.not-selected-security-card")
@@ -1270,6 +1287,19 @@ def _build_public_report(
         "continued_table_text_count": document.count("(계속)"),
         "h2_tail": [node.get_text(" ", strip=True) for node in soup.select("main section h2")][-3:],
     }
+    return document, qa
+
+
+def _build_public_report(
+    *, parent_html: Path, output_path: Path, metrics: pd.DataFrame, dropped: pd.DataFrame
+) -> dict[str, Any]:
+    document, qa = enrich_full_security_report_html(
+        parent_document=parent_html.read_text(encoding="utf-8"),
+        metrics=metrics,
+        dropped=dropped,
+    )
+    output_path.write_text(document, encoding="utf-8")
+    return qa
 
 
 def _public_metrics(metrics: pd.DataFrame) -> pd.DataFrame:
@@ -1438,6 +1468,155 @@ def _public_preflight(
     return {"checks": checks, "privacy": privacy, "status": "PASS" if checks["all_pre_render_gates"] else "FAIL"}
 
 
+def _parameterized_frame(value: pd.DataFrame | str | Path, *, name: str) -> pd.DataFrame:
+    if isinstance(value, pd.DataFrame):
+        frame = value.copy()
+    else:
+        path = Path(value)
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        frame = pd.read_parquet(path) if path.suffix.lower() == ".parquet" else pd.read_csv(path, dtype={"ticker": str})
+    if "ticker" not in frame.columns:
+        raise ValueError(f"{name} lacks ticker")
+    frame["ticker"] = frame["ticker"].map(_ticker)
+    if frame["ticker"].duplicated().any():
+        raise ValueError(f"{name} contains duplicate tickers")
+    return frame
+
+
+def build_full_security_details(
+    *,
+    selected_equities: pd.DataFrame | str | Path,
+    current_equities: pd.DataFrame | str | Path,
+    fresh_start_scores: pd.DataFrame | str | Path,
+    current_vs_target: pd.DataFrame | str | Path,
+    financial_metrics: pd.DataFrame | str | Path,
+    information_asof: str,
+    price_asof: str,
+    output_root: str | Path,
+) -> FullSecurityDetailsResult:
+    """Assemble selected and dropped detail from dynamic caller-supplied universes."""
+
+    financial_source_path = Path(financial_metrics) if isinstance(financial_metrics, (str, Path)) else None
+    selected = _parameterized_frame(selected_equities, name="selected_equities")
+    current = _parameterized_frame(current_equities, name="current_equities")
+    scores = _parameterized_frame(fresh_start_scores, name="fresh_start_scores")
+    comparison = _parameterized_frame(current_vs_target, name="current_vs_target")
+    financial = _parameterized_frame(financial_metrics, name="financial_metrics")
+    selected_tickers = set(selected["ticker"])
+    union_tickers = list(selected["ticker"]) + [
+        ticker for ticker in current["ticker"] if ticker not in selected_tickers
+    ]
+    expected = set(union_tickers)
+    if not expected.issubset(set(financial["ticker"])):
+        missing = sorted(expected.difference(set(financial["ticker"])))
+        raise RuntimeError(f"financial metrics missing selected/dropped tickers: {missing}")
+
+    # Historical full-security metrics already contain the exact presentation
+    # fields.  Reusing that frame preserves the authoritative 26Q3 bytes while
+    # future callers can provide the same generic financial output contract.
+    presentation_columns = {
+        "selection_status", "model_rank", "model_score", "public_rank",
+        "public_score", "public_reason", "reason_code", "current_qty", "current_value",
+    }
+    if expected == set(financial["ticker"]) and presentation_columns.issubset(financial.columns):
+        metrics = financial.copy()
+    else:
+        identity_columns = [column for column in selected.columns if column != "name"]
+        selected_identity = selected[identity_columns].copy()
+        selected_identity["model_selected"] = True
+        current_identity = current.copy()
+        current_identity = current_identity.loc[~current_identity["ticker"].isin(selected_tickers)]
+        current_identity["model_selected"] = False
+        base = pd.concat([selected_identity, current_identity], ignore_index=True, sort=False)
+        base = base.drop_duplicates("ticker", keep="first")
+        finance_columns = [column for column in financial.columns if column not in base.columns or column == "ticker"]
+        metrics = base.merge(financial[finance_columns], on="ticker", how="left", validate="one_to_one")
+        score_columns = [column for column in scores.columns if column not in metrics.columns or column == "ticker"]
+        metrics = metrics.merge(scores[score_columns], on="ticker", how="left", validate="one_to_one")
+        comparison_columns = [column for column in comparison.columns if column not in metrics.columns or column == "ticker"]
+        metrics = metrics.merge(comparison[comparison_columns], on="ticker", how="left", validate="one_to_one")
+        metrics["model_selected"] = metrics["ticker"].isin(selected_tickers)
+        metrics["selection_status"] = metrics["model_selected"].map({True: "선정", False: "미선발"})
+        if "model_rank" not in metrics.columns:
+            metrics["model_rank"] = metrics.get("score_rank")
+        if "model_score" not in metrics.columns:
+            metrics["model_score"] = metrics.get("score")
+        metrics["public_rank"] = metrics["model_rank"].map(
+            lambda value: "미산출" if pd.isna(value) else f"{int(value)}위"
+        )
+        metrics["public_score"] = metrics["model_score"].map(
+            lambda value: "미산출" if pd.isna(value) else f"{float(value):.6f}"
+        )
+        outside = ~metrics["model_selected"] & metrics["model_rank"].notna()
+        excluded = ~metrics["model_selected"] & metrics["model_rank"].isna()
+        metrics["reason_code"] = "SELECTED"
+        metrics.loc[outside, "reason_code"] = "OUTSIDE_TOP_K"
+        metrics.loc[excluded, "reason_code"] = "FILTER_EXCLUSION"
+        metrics["public_reason"] = "이번 분기 모델 선정 기준 충족"
+        metrics.loc[outside, "public_reason"] = metrics.loc[outside, "model_rank"].map(
+            lambda value: f"모델 순위 {int(value)}위로 Top-K 밖"
+        )
+        metrics.loc[excluded, "public_reason"] = "필수 재무조건 또는 데이터 조건 미충족"
+        metrics["information_asof"] = str(pd.Timestamp(information_asof).date())
+        metrics["price_asof"] = str(pd.Timestamp(price_asof).date())
+
+    selected_details = metrics.loc[metrics["ticker"].isin(selected_tickers)].copy()
+    dropped_details = metrics.loc[~metrics["ticker"].isin(selected_tickers) & metrics["ticker"].isin(set(current["ticker"]))].copy()
+    public = _public_metrics(metrics)
+    summary = dropped_details.copy()
+    summary_public = pd.DataFrame(
+        {
+            "종목코드": summary["ticker"],
+            "종목명": summary["name"],
+            "현재 보유수량": pd.to_numeric(summary["current_qty"], errors="coerce").fillna(0).astype(int),
+            "현재 평가금액": pd.to_numeric(summary["current_value"], errors="coerce").fillna(0.0).astype(float),
+            "현재 비중": pd.to_numeric(summary["current_stock_weight"], errors="coerce").fillna(0.0).astype(float),
+            "모델 순위": summary["public_rank"],
+            "모델점수": summary["public_score"],
+            "미선발 사유": summary["public_reason"],
+        }
+    )
+
+    root = Path(output_root)
+    root.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "report_analysis_metrics": root / "report_analysis_equity_metrics.csv",
+        "public_financials": root / "selected_and_dropped_security_public_financials.csv",
+        "public_valuation": root / "selected_and_dropped_security_public_valuation.csv",
+        "dropped_summary": root / "dropped_existing_security_summary.csv",
+    }
+    collision = [str(path) for path in paths.values() if path.exists()]
+    if collision:
+        raise FileExistsError(f"full-security detail artifacts already exist: {collision}")
+    exact_source_replay = (
+        financial_source_path is not None
+        and financial_source_path.is_file()
+        and presentation_columns.issubset(metrics.columns)
+        and set(metrics["ticker"]) == expected
+    )
+    if exact_source_replay:
+        shutil.copyfile(financial_source_path, paths["report_analysis_metrics"])
+        for role, filename, fallback in (
+            ("public_financials", "selected_and_dropped_security_public_financials.csv", public),
+            ("public_valuation", "selected_and_dropped_security_public_valuation.csv", public),
+            ("dropped_summary", "dropped_existing_security_summary.csv", summary_public),
+        ):
+            source = financial_source_path.parent / filename
+            if source.is_file():
+                shutil.copyfile(source, paths[role])
+            else:
+                _safe_csv(paths[role], fallback)
+    else:
+        _safe_csv(paths["report_analysis_metrics"], metrics)
+        _safe_csv(paths["public_financials"], public)
+        _safe_csv(paths["public_valuation"], public)
+        _safe_csv(paths["dropped_summary"], summary_public)
+    return FullSecurityDetailsResult(
+        metrics, selected_details, summary_public, dropped_details, public, paths
+    )
+
+
 def prepare(
     *, run_id: str, financial_parent: Path, advisor_parent: Path
 ) -> Path:
@@ -1489,26 +1668,20 @@ def prepare(
         financial_parent=financial_parent,
         dropped_earnings=dropped_earnings,
     )
-    _safe_csv(staging / "report_analysis_equity_metrics.csv", metrics)
     _safe_csv(staging / "dropped_security_factor_qa.csv", factors)
     _safe_csv(staging / "dropped_security_filter_reason_qa.csv", filters)
-    public = _public_metrics(metrics)
-    _safe_csv(staging / "selected_and_dropped_security_public_financials.csv", public)
-    _safe_csv(staging / "selected_and_dropped_security_public_valuation.csv", public)
-    summary = metrics.loc[metrics["selection_status"].eq("미선발")].copy()
-    summary_public = pd.DataFrame(
-        {
-            "종목코드": summary["ticker"],
-            "종목명": summary["name"],
-            "현재 보유수량": summary["current_qty"].astype(int),
-            "현재 평가금액": summary["current_value"].astype(float),
-            "현재 비중": summary["current_stock_weight"].astype(float),
-            "모델 순위": summary["public_rank"],
-            "모델점수": summary["public_score"],
-            "미선발 사유": summary["public_reason"],
-        }
+    details = build_full_security_details(
+        selected_equities=selected,
+        current_equities=analysis,
+        fresh_start_scores=metrics,
+        current_vs_target=analysis,
+        financial_metrics=metrics,
+        information_asof=INFORMATION_ASOF,
+        price_asof=PRICE_ASOF,
+        output_root=staging,
     )
-    _safe_csv(staging / "dropped_existing_security_summary.csv", summary_public)
+    metrics = details.report_analysis_metrics
+    public = details.public_financial_metrics
 
     for source in sorted((financial_parent / "charts").glob("*.svg")):
         target = staging / "charts" / source.name
@@ -1715,9 +1888,12 @@ def seal(*, run_id: str, manual_visual_status: str) -> Path:
         "dropped_existing_security_summary.csv",
         *[path.relative_to(staging).as_posix() for path in sorted((staging / "charts").glob("*.svg"))],
     ]
-    with ZipFile(staging / PUBLIC_ZIP, "x", compression=ZIP_DEFLATED, compresslevel=9) as archive:
-        for member in public_members:
-            archive.write(staging / member, arcname=member)
+    build_public_distribution_bundle(
+        output_path=staging / PUBLIC_ZIP,
+        public_files={member: staging / member for member in public_members},
+        allowed_suffixes=(".html", ".pdf", ".csv", ".svg"),
+        forbidden_patterns=tuple(re.escape(term) for term in PUBLIC_FORBIDDEN),
+    )
 
     audit_members = [
         "report_analysis_equity_universe.csv",
