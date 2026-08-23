@@ -1,0 +1,48 @@
+{
+  "contract": "GENERIC_FINANCIAL_METRICS_ENGINE_V1",
+  "approved_xbrl_concepts": {
+    "net_income_cfs": ["ProfitLossAttributableToOwnersOfParent"],
+    "net_income_ofs": ["ProfitLoss"],
+    "basic_eps": ["BasicEarningsLossPerShare"],
+    "basic_eps_profit": [
+      "ProfitLossAttributableToOrdinaryEquityHoldersOfParentEntityUsedInCalculatingBasicEarningsPerShare",
+      "ProfitLossAttributableToOrdinaryEquityHoldersOfParentEntity",
+      "ProfitLossAttributableToOwnersOfParent",
+      "ProfitLoss"
+    ],
+    "weighted_average_ordinary_shares": [
+      "WeightedAverageNumberOfOrdinarySharesOutstandingBasic",
+      "WeightedAverageNumberOfOrdinarySharesUsedInCalculationOfBasicEarningsPerShare",
+      "WeightedAverageNumberOfOrdinarySharesUsedInCalculatingBasicEarningsPerShare",
+      "WeightedAverageShares"
+    ]
+  },
+  "approved_note_titles": ["주당이익", "기본주당이익", "earnings per share", "basic earnings per share"],
+  "approved_note_row_labels": {
+    "basic_eps_profit": ["기본주당이익계산용이익", "보통주당기순이익", "보통주반기순이익", "보통주분기순이익", "보통주귀속순이익", "profitattributetoordinaryequityholders"],
+    "weighted_average_ordinary_shares": ["가중평균유통보통주식수", "가중평균유통주식수", "기본주당순이익계산주식수", "weightedaveragenumberofordinaryshares"]
+  },
+  "unit_aliases": {
+    "KRW": ["KRW", "원"],
+    "SHARES": ["SHARES", "주", "천주"],
+    "KRW_PER_SHARE": ["KRWEPS", "KRW/SHARE", "원/주"]
+  },
+  "corporate_action_types": [
+    "RIGHTS_ISSUE", "BONUS_ISSUE", "STOCK_DIVIDEND", "CAPITAL_REDUCTION",
+    "STOCK_SPLIT", "REVERSE_SPLIT", "MERGER", "SPIN_OFF", "CONVERSION",
+    "WARRANT_EXERCISE", "OPTION_EXERCISE", "TREASURY_ACQUISITION",
+    "TREASURY_DISPOSAL", "TREASURY_RETIREMENT", "PREFERRED_CONVERSION"
+  ],
+  "share_class_rules": {
+    "ordinary_markers": ["보통주", "common stock"],
+    "preferred_markers": ["우선주", "preferred", "1우", "2우", "3우", "우B"],
+    "dormant_requires_zero_issued_or_outstanding": true
+  },
+  "per_loss_display": "적자",
+  "price_lookback_days": 20,
+  "public_rounding": {
+    "eps_krw_decimals": 0,
+    "net_income_eok_decimals": 0,
+    "per_decimals": 2
+  }
+}

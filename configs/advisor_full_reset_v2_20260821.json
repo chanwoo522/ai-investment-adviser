@@ -1,0 +1,85 @@
+{
+  "contract_version": "ADVISOR_FULL_RESET_V2",
+  "mode": "ADVISOR_FULL_RESET",
+  "development_only": true,
+  "development_status": "PASS_CONTRACT_CORRECTION",
+  "production_promoted": false,
+  "production_promotion_status": "BLOCKED_PENDING_HISTORICAL_VALIDATION",
+  "lineage": {
+    "parent_run_id": "advisor_full_reset_20260820_20260820T232904592974Z",
+    "parent_run_root": "data/development/advisor_full_reset/runs/run_id=advisor_full_reset_20260820_20260820T232904592974Z",
+    "authoritative_model_run_id": "20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338"
+  },
+  "dates": {
+    "model_information_asof": "2026-08-18",
+    "account_valuation_asof": "2026-08-20",
+    "reference_price_requested_asof": "2026-08-20",
+    "target_date": "2026-08-31"
+  },
+  "model": {
+    "strategy": "D_quality_filter_debt_profitaccel_liq_fresh_start",
+    "baseline_strategy": "D_quality_filter_debt_profitaccel_liq",
+    "top_k": 10,
+    "holding_bonus": 0.0,
+    "keep_current_top_n": 0,
+    "score_parity_tolerance": 1e-12,
+    "target_cash_equivalent_weight": 0.10,
+    "equity_weighting": "EQUAL_WEIGHT",
+    "boundary_fragile_threshold": 0.05
+    ,
+    "production_filter_contract": {
+      "max_Debt_to_Equity_log": 2.398,
+      "min_traded_value": 1000000000,
+      "min_mcap": 100000000000,
+      "min_OpIncome_ttm": 0,
+      "min_op_cur_q": 0
+    }
+  },
+  "source": {
+    "production_scores": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/scores/scores__asof=2026-08-18__target=2026-08-31__v=3291__full_universe.csv",
+    "features": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/intermediate/features_live__asof=2026-08-18__metric=revenue_op__v=3291.parquet",
+    "prices_daily": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/intermediate/prices_daily__asof=2026-08-18__metric=revenue_op__v=1.parquet",
+    "certified_universe": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/intermediate/universe__asof=2026-08-18__v=1.parquet",
+    "certified_security_master": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/intermediate/krx_master__asof=2026-08-18__src=pykrx__v=1.parquet",
+    "marketdata": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/intermediate/krx_marketdata__asof=2026-08-18__v=1.parquet",
+    "fundamentals_canonical": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/intermediate/fundamentals_canonical__asof=2026-08-18__y=2016-2026__v=1.parquet",
+    "fundamentals_current": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/intermediate/fundamentals_current__asof=2026-08-18__v=1.parquet",
+    "dart_raw_dir": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/inputs/dart_raw",
+    "valuation_audit": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/audits/valuation_audit.csv",
+    "industry_policy": "configs/advisor_v2_industry_policy_20260821.json"
+  },
+  "account": {
+    "parent_holdings": "data/development/advisor_full_reset/runs/run_id=advisor_full_reset_20260820_20260820T232904592974Z/account_import/holdings_clean.csv",
+    "parent_snapshot": "data/development/advisor_full_reset/runs/run_id=advisor_full_reset_20260820_20260820T232904592974Z/account_import/account_snapshot.json",
+    "parent_actual_account_performance": "data/development/advisor_full_reset/runs/run_id=advisor_full_reset_20260820_20260820T232904592974Z/actual_account_performance.csv",
+    "parent_prior_model_performance": "data/development/advisor_full_reset/runs/run_id=advisor_full_reset_20260820_20260820T232904592974Z/prior_model_performance.csv",
+    "parent_prepare_state": "data/development/advisor_full_reset/runs/run_id=advisor_full_reset_20260820_20260820T232904592974Z/prepare_state.json",
+    "parent_v1_fresh_scores": "data/development/advisor_full_reset/runs/run_id=advisor_full_reset_20260820_20260820T232904592974Z/fresh_start_scores.csv",
+    "parent_backtest_summary": "data/development/advisor_full_reset/runs/run_id=advisor_full_reset_20260820_20260820T232904592974Z/backtest/fresh_start_comparison_summary.csv",
+    "activity_ledger_status": "NOT_AVAILABLE",
+    "broker_source_sha256": "22c08825b820b28259bd5a4eb6428ab45bba2c9dc2c2245b9d6fe9452b8e34e3"
+  },
+  "cost_policy": {
+    "commission_rate": 0.00015,
+    "buy_commission_rate": 0.00015,
+    "sell_tax_rate_by_market": {
+      "KOSPI": 0.002,
+      "KOSDAQ": 0.002
+    },
+    "unknown_market_sell_tax_rate": 0.002,
+    "historical_sell_tax_schedule_status": "UNAVAILABLE"
+  },
+  "cash": {
+    "strategy_asset_class": "CASH_EQUIVALENT_BUCKET",
+    "implementation_vehicle": "437350",
+    "cash_return_contract": "ZERO_NOMINAL_RETURN_CONSERVATIVE",
+    "implementation_vehicle_cutoff_price_status": "PROVISIONAL_NON_KRX_PRIMARY_SOURCE"
+  },
+  "immutability": {
+    "run_root": "data/development/advisor_full_reset_v2/runs",
+    "production_latest_write_allowed": false,
+    "production_run_write_allowed": false,
+    "model_latest_write_allowed": false,
+    "parent_run_write_allowed": false
+  }
+}
