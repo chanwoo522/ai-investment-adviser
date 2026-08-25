@@ -1,0 +1,6 @@
+/configs/account_asset_classification_20260820.json -text
+/configs/advisor_asset_policy_20260820.json -text
+/configs/advisor_fresh_start_strategies.yaml -text
+/configs/advisor_full_reset_20260821.json -text
+/configs/advisor_full_reset_v2_20260821.json -text
+/configs/advisor_v2_industry_policy_20260821.json -text

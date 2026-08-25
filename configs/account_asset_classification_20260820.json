@@ -1,0 +1,22 @@
+{
+  "contract_version": "ACCOUNT_ASSET_CLASSIFICATION_V1",
+  "account_asof": "2026-08-20",
+  "classifications": [
+    {
+      "ticker": "437350",
+      "canonical_name": "RISE 미국단기투자등급회사채액티브 ETF",
+      "broker_name_alias": "RISE 미국단기투자등급회사채액?",
+      "asset_type": "CASH_EQUIVALENT_RESERVE",
+      "reserve_flag": true,
+      "protected_keep_qty": true,
+      "counts_toward_cash_target": true,
+      "model_universe_eligible": false,
+      "holding_bonus_eligible": false,
+      "keep_current_eligible": false,
+      "top_k_eligible": false,
+      "equity_position_count_excluded": true,
+      "automatic_sell_prohibited_without_explicit_instruction": true,
+      "classification_source": "USER_EXPLICIT_CLASSIFICATION_2026-08-20"
+    }
+  ]
+}
