@@ -1,0 +1,108 @@
+{
+  "contract_version": "ADVISOR_INDUSTRY_AND_SECTOR_POLICY_V2",
+  "official_taxonomy_default": {
+    "namespace": "KRX_REFERENCE_INDUSTRY4",
+    "version": "data_3133_20260329",
+    "join_keys": [
+      "ticker",
+      "corp_code"
+    ],
+    "fuzzy_name_join_allowed": false
+  },
+  "official_industry_exact_overrides": [
+    {
+      "ticker": "322000",
+      "corp_code": "01199550",
+      "security_id": "322000",
+      "security_name": "HD현대에너지솔루션",
+      "rejected_original_code": "032601",
+      "rejected_original_name": "반도체 제조업",
+      "official_industry_code": "ISSUER_PRIMARY_SOLAR_MODULE",
+      "official_industry_name": "태양광 모듈 제조 및 판매",
+      "official_industry_source": "HD현대에너지솔루션 2024 지속가능경영보고서 기업개요",
+      "source_url": "https://esg.hd.com/upload/admin/report/1751333824013/%5B2024%5D%20HD%ED%98%84%EB%8C%80%EC%97%90%EB%84%88%EC%A7%80%EC%86%94%EB%A3%A8%EC%85%98%20%EC%A7%80%EC%86%8D%EA%B0%80%EB%8A%A5%EA%B2%BD%EC%98%81%EB%B3%B4%EA%B3%A0%EC%84%9C%20-%202025%EB%85%84%20%EB%B0%9C%EA%B0%84.pdf",
+      "taxonomy_namespace": "ISSUER_DISCLOSED_PRIMARY_BUSINESS",
+      "taxonomy_version": "HD_ESG_2024_REPORT_PUBLISHED_2025",
+      "override_status": "CERTIFIED_EXACT_IDENTITY_CORRECTION"
+      ,
+      "override_reason": "REJECT_KRX_REFERENCE_032601_AND_USE_EXACT_ISSUER_DISCLOSED_PRIMARY_BUSINESS"
+    }
+  ],
+  "advisor_sector_exact_ticker_map": {
+    "005930": "반도체·전자",
+    "025560": "반도체·산업장비",
+    "041920": "의료기기",
+    "042000": "인터넷·플랫폼",
+    "053610": "산업재·부품",
+    "060280": "의료로봇·기기",
+    "080220": "반도체·전자",
+    "098460": "반도체·정밀장비",
+    "121600": "첨단소재·화학",
+    "131290": "반도체·검사장비",
+    "161000": "자동차부품",
+    "171090": "디스플레이·장비",
+    "214150": "의료기기",
+    "218410": "통신·반도체",
+    "219130": "반도체·전자부품",
+    "232140": "반도체·검사장비",
+    "253450": "미디어·콘텐츠",
+    "267270": "산업재·기계",
+    "322000": "재생에너지·태양광",
+    "327260": "반도체·전자부품",
+    "330860": "산업재·부품",
+    "425420": "반도체·검사장비",
+    "437350": "현금성 자산"
+  },
+  "advisor_sector_source": "ADVISOR_EXACT_TICKER_RISK_SECTOR_POLICY_V2"
+  ,
+  "display_name_exact_ticker_map": {
+    "005930": "삼성전자",
+    "025560": "미래산업",
+    "034730": "SK",
+    "041920": "메디아나",
+    "042000": "카페24",
+    "053610": "프로텍",
+    "060280": "큐렉소",
+    "080220": "제주반도체",
+    "098460": "고영",
+    "121600": "나노신소재",
+    "131290": "티에스이",
+    "161000": "애경케미칼",
+    "171090": "선익시스템",
+    "214150": "클래시스",
+    "218410": "RFHIC",
+    "219130": "타이거일렉",
+    "232140": "와이씨",
+    "253450": "스튜디오드래곤",
+    "267270": "HD현대건설기계",
+    "322000": "HD현대에너지솔루션",
+    "327260": "RF머트리얼즈",
+    "330860": "네패스아크",
+    "425420": "티에프이",
+    "437350": "RISE 미국단기투자등급회사채액티브"
+  },
+  "official_industry_name_by_code": {
+    "032001": "기초 화학물질 제조업",
+    "032004": "기타 화학제품 제조업",
+    "032601": "반도체 제조업",
+    "032602": "전자부품 제조업",
+    "032604": "통신 및 방송 장비 제조업",
+    "032701": "의료용 기기 제조업",
+    "032702": "측정, 시험, 항해, 제어 및 기타 정밀기기 제조업; 광학기기 제외",
+    "032902": "특수 목적용 기계 제조업",
+    "105901": "영화, 비디오물, 방송프로그램 제작 및 배급업",
+    "106301": "자료처리, 호스팅, 포털 및 기타 인터넷 정보매개 서비스업",
+    "116409": "기타 금융업",
+    "137309": "그 외 기타 전문, 과학 및 기술 서비스업",
+    "074708": "기타 상품 전문 소매업"
+  },
+  "display_and_code_label_source": "EXACT_TICKER_AND_KRX_CODE_LABEL_REVIEW_20260821"
+  ,
+  "exact_identifier_overrides": [
+    {
+      "ticker": "041920",
+      "corp_code": "00273439",
+      "evidence": "immutable 2026-04-12 full-universe score artifact exact ticker row"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "contract": "PARAMETERIZED_QUARTERLY_ADVISOR_PIPELINE_V1",
+  "strategy_definition": {
+    "strategy_config_path": "configs/strategies.yaml",
+    "strategy_name": "D_quality_filter_debt_profitaccel_liq"
+  },
+  "metric": "revenue_op",
+  "target_date": "YYYY-MM-DD",
+  "feature_versions": {
+    "universe_v": 1,
+    "px_v": 1,
+    "ret_v": 1,
+    "fund_v": 1,
+    "factor_in_v": 1,
+    "factor_out_v": 3291,
+    "feat_v": 3291,
+    "mcap_top": 800,
+    "trd_bot": 0.1,
+    "lookback_years": 15,
+    "start": "YYYYMMDD",
+    "fs_div": "CFS",
+    "fund_mode": "union",
+    "with_shares_industry": true,
+    "shares_out_v": 9201
+  },
+  "security_classification_path": "path/to/account_asset_classification.json",
+  "official_equity_price_overrides": "path/to/official_equity_close_overrides.csv",
+  "official_krx300_path": "path/to/official_krx300_price_index.csv",
+  "source_financial_run": "path/to/certified_full_security_financial_run",
+  "commission_rate": 0.00015,
+  "buy_commission_rate": 0.00015,
+  "sell_tax_rate_by_market": {
+    "KOSPI": 0.002,
+    "KOSDAQ": 0.002
+  },
+  "default_sell_tax_rate": 0.002,
+  "capital_reconciliation_tolerance_krw": 1.0,
+  "boundary_fragile_threshold": 0.05,
+  "public_forbidden_terms": [
+    "account_id",
+    "broker_name",
+    "source_receipt"
+  ],
+  "public_forbidden_patterns": [
+    "account_id",
+    "broker_name",
+    "source_receipt"
+  ]
+}

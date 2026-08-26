@@ -1,0 +1,81 @@
+{
+  "contract_version": "ADVISOR_FULL_RESET_V1",
+  "mode": "ADVISOR_FULL_RESET",
+  "development_only": true,
+  "promotion_status": "BLOCKED_PENDING_FRESH_START_VALIDATION",
+  "development_lineage": {
+    "supersedes_development_runs": [
+      "advisor_full_reset_20260820_20260821T072020111Z"
+    ],
+    "reason": "CONTRACT_AUDIT_CORRECTIONS_WITHOUT_MUTATING_PRIOR_RUN"
+  },
+  "account": {
+    "account_asof": "2026-08-20",
+    "broker_account_file": "data/portfolio/history/20260820.xlsx",
+    "previous_account_evidence_manifest": "data/portfolio/evidence/actual_rebalance_20260401_user_confirmed_20260820T084015244621Z/evidence_manifest.json",
+    "previous_account_holdings": "data/portfolio/evidence/actual_rebalance_20260401_user_confirmed_20260820T084015244621Z/derived_post_trade_snapshot_20260401.csv",
+    "import_master": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/intermediate/krx_master__asof=2026-08-18__src=pykrx__v=1.parquet",
+    "importer_security_classification": "configs/account_asset_classification_20260820.json",
+    "advisor_asset_policy": "configs/advisor_asset_policy_20260820.json"
+  },
+  "model": {
+    "asof": "2026-08-18",
+    "target": "2026-08-31",
+    "price_cutoff": "2026-08-18",
+    "strategy": "D_quality_filter_debt_profitaccel_liq_fresh_start",
+    "baseline_strategy": "D_quality_filter_debt_profitaccel_liq",
+    "strategy_config": "configs/advisor_fresh_start_strategies.yaml",
+    "top_k": 10,
+    "target_cash_equivalent_weight": 0.10,
+    "equity_weighting": "EQUAL_WEIGHT",
+    "holding_bonus": 0.0,
+    "keep_current_top_n": 0
+  },
+  "data": {
+    "authoritative_model_run_id": "20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338",
+    "features": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/intermediate/features_live__asof=2026-08-18__metric=revenue_op__v=3291.parquet",
+    "returns_monthly": "data/processed/returns_monthly__src=pykrx__asof=2026-08-18__metric=revenue_op__v=1.parquet",
+    "returns_monthly_status": "HISTORICAL_DIAGNOSTIC_NOT_POINT_IN_TIME_CERTIFIED",
+    "prices_daily": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/intermediate/prices_daily__asof=2026-08-18__metric=revenue_op__v=1.parquet",
+    "certified_universe": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/intermediate/universe__asof=2026-08-18__v=1.parquet",
+    "certified_security_master": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/intermediate/krx_master__asof=2026-08-18__src=pykrx__v=1.parquet",
+    "marketdata": "data/production/runs/run_id=20260818_q2_revenue_op_D_quality_v9201_20260820T015429567338/intermediate/krx_marketdata__asof=2026-08-18__v=1.parquet",
+    "krx300_benchmark": "data/production/report_corrections/run_id=model_only_public_20260818_20260820T123000070494Z/inputs/benchmark_qa.csv",
+    "cash_equivalent_cutoff_price": {
+      "ticker": "437350",
+      "price": 12470,
+      "price_date": "2026-08-18",
+      "source": "PYKRX_NAVER_MARKET_DATA",
+      "certification_status": "PROVISIONAL_NON_KRX_PRIMARY_SOURCE"
+    }
+  },
+  "performance": {
+    "prior_model_target": "data/archive/quarantine_20260330/execution_plan__total=100000000__v=3291.csv",
+    "prior_model_target_date": "2026-03-31",
+    "prior_model_target_status": "PROVISIONAL_EXPLICIT_LEGACY_ARTIFACT",
+    "actual_activity_ledger": null
+  },
+  "cost_policy": {
+    "commission_rate": 0.00015,
+    "buy_commission_rate": 0.00015,
+    "sell_tax_rate_by_market": {
+      "KOSPI": 0.002,
+      "KOSDAQ": 0.002
+    },
+    "unknown_market_sell_tax_rate": 0.002,
+    "historical_tax_schedule_status": "UNAVAILABLE_CURRENT_RATE_USED_PROVISIONALLY"
+  },
+  "execution": {
+    "order_submission_enabled": false,
+    "execution_phase_enabled": false,
+    "fill_reconciliation_enabled": false,
+    "orderable_cash_required": false,
+    "fresh_post_sale_snapshot_required": false
+  },
+  "immutability": {
+    "run_root": "data/development/advisor_full_reset/runs",
+    "production_latest_write_allowed": false,
+    "production_run_write_allowed": false,
+    "model_latest_write_allowed": false
+  }
+}

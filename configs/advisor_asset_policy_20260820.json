@@ -1,0 +1,38 @@
+{
+  "contract_version": "ADVISOR_ASSET_CLASSIFICATION_V1",
+  "account_asof": "2026-08-20",
+  "allowed_asset_classes": [
+    "EQUITY",
+    "CASH_EQUIVALENT",
+    "CASH",
+    "LIABILITY",
+    "UNSUPPORTED"
+  ],
+  "default_equity_policy": {
+    "asset_class": "EQUITY",
+    "equity_universe_eligible": true,
+    "factor_eligible": true,
+    "top_k_eligible": true,
+    "holding_bonus_eligible": false,
+    "keep_current_eligible": false,
+    "equity_position_count_excluded": false,
+    "counts_toward_cash_target": false
+  },
+  "classifications": [
+    {
+      "ticker": "437350",
+      "canonical_name": "RISE 미국단기투자등급회사채액티브 ETF",
+      "asset_class": "CASH_EQUIVALENT",
+      "equity_universe_eligible": false,
+      "factor_eligible": false,
+      "top_k_eligible": false,
+      "holding_bonus_eligible": false,
+      "keep_current_eligible": false,
+      "equity_position_count_excluded": true,
+      "counts_toward_cash_target": true,
+      "advisor_treatment": "COMPARE_CURRENT_VALUE_WITH_TARGET_BUCKET_ONLY",
+      "classification_source": "USER_EXPLICIT_ADVISOR_POLICY_2026-08-20"
+    }
+  ]
+}
+

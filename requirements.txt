@@ -6,6 +6,6 @@ scikit-learn==1.8.0
 joblib==1.5.3
 requests==2.32.5
 urllib3==2.6.3
-OpenDartReader==0.2.3
+OpenDartReader @ https://files.pythonhosted.org/packages/d9/23/e76575618af74b3572b6791b6e1cc403832af9cb2d6c6961a0749b37bf84/OpenDartReader-0.2.3-py3-none-any.whl#sha256=710c01969e5b01dc1b7bc78a9f5f13cad11623cdb2f6ed45110f6cd40a111ecc
 pykrx==1.2.4
 matplotlib==3.10.8
